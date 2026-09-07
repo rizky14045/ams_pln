@@ -3,9 +3,10 @@
 namespace App\Models;
 
 use App\Libraries\QrcodeAsset;
+use App\Models\PeriodeAsset;
 use App\Traits\AssetLogger;
-use Illuminate\Database\Eloquent\Model;
 use Datetime;
+use Illuminate\Database\Eloquent\Model;
 
 class AssetExtracomptable extends ArchiveableModel
 {
@@ -245,6 +246,12 @@ class AssetExtracomptable extends ArchiveableModel
     public function ruang()
     {
         return $this->hasOne(Ruang::class, 'id', 'id_ruang')->withTrashed();
+    }
+
+    public function latestPeriodeAsset()
+    {
+        // Mengambil 1 record PeriodeAsset terakhir berdasarkan id/created_at
+        return $this->hasOne(PeriodeAsset::class, 'asset_id', 'id')->latest('id');
     }
 
 }

@@ -200,3 +200,19 @@ Route::prefix('v1')->name('api.v1::')->namespace('V1')->group(function() {
     });
 
 });
+
+Route::prefix('v2')->name('api.v2.')->namespace('V2')->group(function() {
+     Route::post('login', 'AuthController@login')->name('login');
+     Route::middleware(['jwt.auth'])->group(function() {
+        Route::post('logout', 'AuthController@logout')->name('logout');
+        Route::get('me', 'AuthController@me')->name('me');
+        Route::get('periode', 'PeriodeController@getPeriode')->name('periode.get');
+        Route::post('periode', 'PeriodeController@createPeriode')->name('periode.create');
+        Route::get('periode/{id}', 'PeriodeController@show')->name('periode.show');
+
+        Route::get('assets', 'AssetExtracomtableController@getAssets')->name('assets.get');
+        Route::get('assets/{code}', 'AssetExtracomtableController@GetDetailAsset')->name('assets.detail');
+        Route::post('assets/update-status', 'AssetExtracomtableController@updateStatus')->name('assets.update-status');
+     });
+
+});
