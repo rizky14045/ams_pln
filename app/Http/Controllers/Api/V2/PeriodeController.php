@@ -12,6 +12,7 @@ use App\Models\AssetExtracomptable;
 use App\Models\Periode;
 use App\Models\PeriodeAsset;
 use App\Models\User;
+use App\Services\PeriodeService;
 use Carbon\Carbon;
 use Exception;
 use Illuminate\Http\Request;
@@ -54,38 +55,10 @@ class PeriodeController extends ApiController
                 422                      // status_code (Unprocessable Entity)
             );
         }
-        DB::beginTransaction();
-
         try {
-            // 1. Buat data periode
-            $periode = Periode::create([
-                'year' => $request->year,
-            ]);
-
-            // 2. Ambil semua asset_id sekaligus
-            $assetIds = AssetExtracomptable::pluck('id');
-
-            $now = now();
-            $periodeAssets = [];
-
-            // 3. Susun array data untuk batch insert
-            foreach ($assetIds as $assetId) {
-                $periodeAssets[] = [
-                    'periode_id' => $periode->id,
-                    'asset_id'   => $assetId,
-                    'status'     => null,
-                    'tanggal_inventaris' => null,
-                    'created_at' => $now,
-                    'updated_at' => $now,
-                ];
-            }
-
-            // 4. Lakukan batch insert per 1.000 record agar tidak melebihi limit query
-            foreach (array_chunk($periodeAssets, 1000) as $chunk) {
-                PeriodeAsset::insert($chunk);
-            }
-
-            DB::commit();
+            // Buat periode + generate slot periode_asset untuk seluruh asset
+            // extra comptable (di dalam DB transaction).
+            $periode = app(PeriodeService::class)->create($request->year);
 
             return ResponseHelper::response(
                 'Berhasil membuat periode', // messages
@@ -95,7 +68,6 @@ class PeriodeController extends ApiController
             );
 
         } catch (Exception $e) {
-            DB::rollBack();
 
             return ResponseHelper::response(
                 'Gagal membuat periode', // messages

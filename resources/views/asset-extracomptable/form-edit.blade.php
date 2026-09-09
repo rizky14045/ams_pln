@@ -91,15 +91,6 @@
         'value' => date('Y-m-d')
       ])
 
-      @include('partials.fields.select2', [
-        'name' => 'status',
-        'value' => $asset->status,
-        'required' => true,
-        'label' => 'Status Barang',
-        'options' => $options_status,
-        'emptyOption' => '-- Pilih Status Barang --'
-      ])
-
       @include('partials.fields.image', [
         'name' => 'gambar',
         'value' => $asset->gambar,
