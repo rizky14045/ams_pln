@@ -8,39 +8,48 @@ use App\Models\Ruang;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Export rekap inventarisasi extra comptable untuk 1 periode.
+ * Export inventarisasi extra comptable untuk 1 periode.
  *
- * Isi tiap baris sama dengan halaman "Report Extra Comptable"
- * (No, Gedung, Lantai, Ruang, Jenis, Sub Jenis, Jumlah, Status Barang),
- * namun datanya dipecah menjadi beberapa sheet: 1 sheet per nama Ruang,
- * judul sheet = nama ruang.
+ * Data dirinci PER BARANG (1 baris = 1 aset), bukan rekap jumlah, supaya
+ * status hasil scan tiap barang kelihatan. Dipecah menjadi beberapa sheet:
+ * 1 sheet per nama Ruang, judul sheet = nama ruang.
+ *
+ * Kolom: No, Gedung, Lantai, Ruang, Kode Aset, Nama Aset, Jenis, Sub Jenis,
+ *        Status Barang, Tanggal Scan, Discan Oleh.
  */
 class ExcelInventarisasiExtracomptablePerRuang
 {
     protected $periode;
 
     protected $columns = [
-        'no' => [
-            'label' => 'No.',
-            'format' => null, // diisi di constructor (butuh $this)
-        ],
-        'gedung'         => ['label' => 'Gedung'],
-        'lantai'         => ['label' => 'Lantai'],
-        'ruang'          => ['label' => 'Ruang'],
-        'jenis'          => ['label' => 'Jenis'],
-        'subjenis'       => ['label' => 'Sub Jenis'],
-        'jumlah'         => ['label' => 'Jumlah'],
-        'periode_status' => ['label' => 'Status Barang', 'format' => null],
+        'no'           => ['label' => 'No.', 'format' => null],       // diisi di constructor
+        'gedung'       => ['label' => 'Gedung'],
+        'lantai'       => ['label' => 'Lantai'],
+        'ruang'        => ['label' => 'Ruang'],
+        'kd_asset'     => ['label' => 'Kode Aset'],
+        'nama_asset'   => ['label' => 'Nama Aset'],
+        'jenis'        => ['label' => 'Jenis'],
+        'subjenis'     => ['label' => 'Sub Jenis'],
+        'status'       => ['label' => 'Status Barang', 'format' => null],
+        'tanggal_scan' => ['label' => 'Tanggal Scan', 'format' => null],
+        'scan_by'      => ['label' => 'Discan Oleh', 'format' => null],
     ];
 
     public function __construct(Periode $periode)
     {
         $this->periode = $periode;
+
         $this->columns['no']['format'] = function ($val, $row, $i) {
             return $i + 1;
         };
-        $this->columns['periode_status']['format'] = function ($val) {
-            return \App\Models\AssetExtracomptable::scanStatusText($val);
+        $this->columns['status']['format'] = function ($val) {
+            return AssetExtracomptable::scanStatusText($val);
+        };
+        $this->columns['tanggal_scan']['format'] = function ($val) {
+            return $val ? date('d/m/Y H:i', strtotime($val)) : '-';
+        };
+        $this->columns['scan_by']['format'] = function ($val) {
+            return $val !== null && $val !== '' ? $val : '-';
         };
     }
 
@@ -112,10 +121,7 @@ class ExcelInventarisasiExtracomptablePerRuang
             }
 
             foreach ($groups as $group) {
-                $rows = AssetExtracomptable::queryReportByPeriode($this->periode->id)
-                    ->whereIn('asset_extracomptable.id_ruang', $group['ids'])
-                    ->get()
-                    ->toArray();
+                $rows = $this->getRows($group['ids']);
 
                 $excel->sheet($group['sheet'], function ($sheet) use ($columns, $rows) {
                     $this->fixPageMargins($sheet);
@@ -124,6 +130,47 @@ class ExcelInventarisasiExtracomptablePerRuang
                 });
             }
         });
+    }
+
+    /**
+     * Daftar barang (1 baris/aset) untuk sekumpulan ruang, pada periode ini.
+     *
+     * @param  int[]  $ruangIds
+     * @return array[]
+     */
+    protected function getRows(array $ruangIds)
+    {
+        return DB::table('periode_asset')
+            ->join('asset_extracomptable', 'asset_extracomptable.id', '=', 'periode_asset.asset_id')
+            ->leftJoin('gedung', 'gedung.id', '=', 'asset_extracomptable.id_gedung')
+            ->leftJoin('ruang', 'ruang.id', '=', 'asset_extracomptable.id_ruang')
+            ->leftJoin('jenis_extracomptable', 'jenis_extracomptable.id', '=', 'asset_extracomptable.id_jenis')
+            ->leftJoin('subjenis_extracomptable', 'subjenis_extracomptable.id', '=', 'asset_extracomptable.id_subjenis')
+            ->leftJoin('cms_users', 'cms_users.id', '=', 'periode_asset.scan_by')
+            ->where('periode_asset.periode_id', $this->periode->id)
+            ->whereNull('asset_extracomptable.deleted_at')
+            ->whereIn('asset_extracomptable.id_ruang', $ruangIds)
+            ->orderBy('gedung.nama', 'asc')
+            ->orderBy('asset_extracomptable.lantai', 'asc')
+            ->orderBy('jenis_extracomptable.nama', 'asc')
+            ->orderBy('subjenis_extracomptable.nama', 'asc')
+            ->orderBy('asset_extracomptable.kd_asset', 'asc')
+            ->get([
+                'gedung.nama as gedung',
+                'asset_extracomptable.lantai as lantai',
+                'ruang.nama_ruang as ruang',
+                'asset_extracomptable.kd_asset as kd_asset',
+                'asset_extracomptable.nama_asset as nama_asset',
+                'jenis_extracomptable.nama as jenis',
+                'subjenis_extracomptable.nama as subjenis',
+                'periode_asset.status as status',
+                'periode_asset.tanggal_inventaris as tanggal_scan',
+                'cms_users.name as scan_by',
+            ])
+            ->map(function ($row) {
+                return (array) $row;
+            })
+            ->all();
     }
 
     /**
@@ -194,7 +241,7 @@ class ExcelInventarisasiExtracomptablePerRuang
                 $name = 'Tanpa Nama Ruang';
             }
 
-            $key = function_exists('mb_strtolower') ? mb_strtolower($name) : strtolower($name);
+            $key = $this->lower($name);
             if (!isset($groups[$key])) {
                 $groups[$key] = ['name' => $name, 'ids' => []];
             }
