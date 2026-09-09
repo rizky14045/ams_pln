@@ -11,8 +11,9 @@ use Illuminate\Support\Facades\DB;
  * Export rekap inventarisasi extra comptable untuk 1 periode.
  *
  * Isi tiap baris sama dengan halaman "Report Extra Comptable"
- * (No, Gedung, Lantai, Ruang, Jenis, Sub Jenis, Jumlah), namun datanya
- * dipecah menjadi beberapa sheet: 1 sheet per Ruang, judul sheet = nama ruang.
+ * (No, Gedung, Lantai, Ruang, Jenis, Sub Jenis, Jumlah, Status Barang),
+ * namun datanya dipecah menjadi beberapa sheet: 1 sheet per nama Ruang,
+ * judul sheet = nama ruang.
  */
 class ExcelInventarisasiExtracomptablePerRuang
 {
@@ -23,11 +24,11 @@ class ExcelInventarisasiExtracomptablePerRuang
             'label' => 'No.',
             'format' => null, // diisi di constructor (butuh $this)
         ],
-        'gedung'      => ['label' => 'Gedung'],
-        'lantai'      => ['label' => 'Lantai'],
-        'ruang'       => ['label' => 'Ruang'],
-        'jenis'       => ['label' => 'Jenis'],
-        'subjenis'    => ['label' => 'Sub Jenis'],
+        'gedung'         => ['label' => 'Gedung'],
+        'lantai'         => ['label' => 'Lantai'],
+        'ruang'          => ['label' => 'Ruang'],
+        'jenis'          => ['label' => 'Jenis'],
+        'subjenis'       => ['label' => 'Sub Jenis'],
         'jumlah'         => ['label' => 'Jumlah'],
         'periode_status' => ['label' => 'Status Barang', 'format' => null],
     ];
@@ -49,52 +50,97 @@ class ExcelInventarisasiExtracomptablePerRuang
     }
 
     /**
-     * Generate lalu langsung kirim sebagai unduhan .xlsx.
+     * Generate lalu kirim sebagai unduhan .xlsx.
      *
-     * PHPExcel 1.8 masih memakai sintaks lama (mis. string offset kurung kurawal)
-     * yang memicu E_DEPRECATED / E_STRICT pada PHP >= 7.4; tanpa diredam, Laravel
-     * mempromosikannya menjadi ErrorException saat proses render Excel.
+     * PHPExcel 1.8 mengeluarkan banyak notice/warning/deprecation di PHP >= 7.4.
+     * Kalau teks itu ikut tercetak ke response, file .xlsx jadi rusak / corrupt.
+     * Karena itu: error_reporting(0) + display_errors off selama render, buffer
+     * dibersihkan, lalu file dibungkus Response Laravel yang bersih.
      */
     public function download($filename = null)
     {
+        $filename = $filename ?: $this->getDefaultFilename();
+
         $previousErrorReporting = error_reporting();
-        error_reporting($previousErrorReporting & ~E_DEPRECATED & ~E_STRICT & ~E_NOTICE);
+        $previousDisplayErrors = ini_get('display_errors');
+        error_reporting(0);
+        ini_set('display_errors', '0');
+        @ini_set('zlib.output_compression', '0');
 
         try {
-            return $this->generate($filename)->download('xlsx');
+            $content = $this->generate($filename)->string('xlsx');
         } finally {
             error_reporting($previousErrorReporting);
+            ini_set('display_errors', $previousDisplayErrors);
         }
+
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+
+        return response($content, 200, [
+            'Content-Type'        => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Content-Disposition' => 'attachment; filename="'.$filename.'.xlsx"',
+            'Content-Length'      => strlen($content),
+            'Cache-Control'       => 'no-store, no-cache, must-revalidate',
+            'Pragma'              => 'public',
+        ]);
     }
 
     public function generate($filename = null)
     {
         $filename = $filename ?: $this->getDefaultFilename();
-        $ruangs = $this->getRuangs();
         $columns = $this->columns;
+        $groups = $this->getRuangGroups();
 
-        return \Excel::create($filename, function ($excel) use ($ruangs, $columns) {
-            if ($ruangs->isEmpty()) {
+        // Judul sheet disiapkan di awal supaya benar-benar unik (case-insensitive)
+        // dan valid untuk Excel (maks 31 char). Nama sheet duplikat / case-berbeda
+        // membuat Excel menolak file: "problem with content ... workbook.xml".
+        $used = [];
+        foreach ($groups as $i => $group) {
+            $groups[$i]['sheet'] = $this->makeSheetTitle($group['name'], $used);
+        }
+
+        return \Excel::create($filename, function ($excel) use ($groups, $columns) {
+            if (empty($groups)) {
                 $excel->sheet('Kosong', function ($sheet) use ($columns) {
+                    $this->fixPageMargins($sheet);
                     $this->writeHeader($sheet, $columns);
                 });
 
                 return;
             }
 
-            foreach ($ruangs as $ruang) {
-                $rows = AssetExtracomptable::queryReportByPeriode($this->periode->id, null, null, $ruang->id)
+            foreach ($groups as $group) {
+                $rows = AssetExtracomptable::queryReportByPeriode($this->periode->id)
+                    ->whereIn('asset_extracomptable.id_ruang', $group['ids'])
                     ->get()
                     ->toArray();
 
-                $title = $this->sheetTitle($ruang->nama_ruang);
-
-                $excel->sheet($title, function ($sheet) use ($columns, $rows) {
+                $excel->sheet($group['sheet'], function ($sheet) use ($columns, $rows) {
+                    $this->fixPageMargins($sheet);
                     $this->writeHeader($sheet, $columns);
                     $this->writeRows($sheet, $columns, $rows);
                 });
             }
         });
+    }
+
+    /**
+     * Maatwebsite 2.1 memakai config 'page_margin' => false lalu memanggil
+     * PageMargins::setTop(false) dst → writer menulis <pageMargins left="" .../>
+     * yang TIDAK valid → Excel: "problem with content ... Worksheet properties".
+     * Set ulang dengan angka valid.
+     */
+    protected function fixPageMargins($sheet)
+    {
+        $margins = $sheet->getPageMargins();
+        $margins->setTop(0.75);
+        $margins->setBottom(0.75);
+        $margins->setLeft(0.7);
+        $margins->setRight(0.7);
+        $margins->setHeader(0.3);
+        $margins->setFooter(0.3);
     }
 
     protected function writeHeader($sheet, array $columns)
@@ -120,9 +166,13 @@ class ExcelInventarisasiExtracomptablePerRuang
     }
 
     /**
-     * Ruang mana saja yang punya aset pada periode ini.
+     * Kelompokkan ruang yang punya aset pada periode ini berdasarkan NAMA
+     * (case-insensitive) — jadi ruang bernama sama di gedung berbeda, atau
+     * beda kapitalisasi, digabung ke satu sheet (kolom Gedung/Lantai membedakan).
+     *
+     * @return array<int, array{name: string, ids: int[]}>
      */
-    protected function getRuangs()
+    protected function getRuangGroups()
     {
         $ruangIds = DB::table('periode_asset')
             ->join('asset_extracomptable', 'asset_extracomptable.id', '=', 'periode_asset.asset_id')
@@ -132,26 +182,71 @@ class ExcelInventarisasiExtracomptablePerRuang
             ->pluck('asset_extracomptable.id_ruang')
             ->all();
 
-        return Ruang::withTrashed()
+        $ruangs = Ruang::withTrashed()
             ->whereIn('id', $ruangIds)
             ->orderBy('nama_ruang', 'asc')
             ->get();
+
+        $groups = [];
+        foreach ($ruangs as $ruang) {
+            $name = trim(preg_replace('/\s+/u', ' ', (string) $ruang->nama_ruang));
+            if ($name === '') {
+                $name = 'Tanpa Nama Ruang';
+            }
+
+            $key = function_exists('mb_strtolower') ? mb_strtolower($name) : strtolower($name);
+            if (!isset($groups[$key])) {
+                $groups[$key] = ['name' => $name, 'ids' => []];
+            }
+            $groups[$key]['ids'][] = (int) $ruang->id;
+        }
+
+        return array_values($groups);
     }
 
     /**
-     * Judul sheet: nama ruang, dibersihkan agar valid untuk Excel
-     * (maks 31 karakter, tanpa karakter * : / \ ? [ ]).
-     * Duplikasi nama ditangani otomatis oleh PHPExcel.
+     * Judul sheet valid Excel: maks 31 karakter, tanpa * : / \ ? [ ] dan tanpa
+     * apostrof di ujung, serta unik case-insensitive (Excel menganggap "Ruang"
+     * dan "ruang" sama). Bentrok diberi akhiran " (2)", " (3)", ...
      */
-    protected function sheetTitle($name)
+    protected function makeSheetTitle($name, array &$used)
     {
         $title = str_replace(['*', ':', '/', '\\', '?', '[', ']'], ' ', (string) $name);
         $title = trim(preg_replace('/\s+/u', ' ', $title));
+        $title = trim($title, "'");
 
         if ($title === '') {
             $title = 'Ruang';
         }
 
-        return function_exists('mb_substr') ? mb_substr($title, 0, 31) : substr($title, 0, 31);
+        $title = $this->cut($title, 31);
+
+        if (in_array($this->lower($title), $used, true)) {
+            $base = $title;
+            $n = 2;
+            do {
+                $suffix = ' ('.$n.')';
+                $title = $this->cut($base, 31 - strlen($suffix)).$suffix;
+                $n++;
+            } while (in_array($this->lower($title), $used, true) && $n < 1000);
+        }
+
+        $used[] = $this->lower($title);
+
+        return $title;
+    }
+
+    protected function cut($s, $len)
+    {
+        if ($len < 1) {
+            $len = 1;
+        }
+
+        return function_exists('mb_substr') ? mb_substr($s, 0, $len) : substr($s, 0, $len);
+    }
+
+    protected function lower($s)
+    {
+        return function_exists('mb_strtolower') ? mb_strtolower($s) : strtolower($s);
     }
 }
