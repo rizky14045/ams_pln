@@ -49,22 +49,45 @@ class ExcelInventarisasiExtracomptablePerRuang
     }
 
     /**
-     * Generate lalu langsung kirim sebagai unduhan .xlsx.
+     * Generate lalu kirim sebagai unduhan .xlsx.
      *
-     * PHPExcel 1.8 masih memakai sintaks lama (mis. string offset kurung kurawal)
-     * yang memicu E_DEPRECATED / E_STRICT pada PHP >= 7.4; tanpa diredam, Laravel
-     * mempromosikannya menjadi ErrorException saat proses render Excel.
+     * PHPExcel 1.8 mengeluarkan banyak notice/warning/deprecation di PHP >= 7.4.
+     * Kalau teks itu ikut tercetak ke response, file .xlsx jadi rusak / corrupt
+     * ("cannot be opened because it is corrupt"). Karena itu:
+     *  - error_reporting(0) selama proses render (fatal tetap fatal),
+     *  - display_errors dimatikan,
+     *  - semua output buffer dibersihkan sebelum body dikirim,
+     *  - file diambil sebagai string lalu dibungkus Response Laravel yang bersih
+     *    (tidak memakai _download() bawaan Maatwebsite yang rawan output nyasar).
      */
     public function download($filename = null)
     {
+        $filename = $filename ?: $this->getDefaultFilename();
+
         $previousErrorReporting = error_reporting();
-        error_reporting($previousErrorReporting & ~E_DEPRECATED & ~E_STRICT & ~E_NOTICE);
+        $previousDisplayErrors = ini_get('display_errors');
+        error_reporting(0);
+        ini_set('display_errors', '0');
+        @ini_set('zlib.output_compression', '0');
 
         try {
-            return $this->generate($filename)->download('xlsx');
+            $content = $this->generate($filename)->string('xlsx');
         } finally {
             error_reporting($previousErrorReporting);
+            ini_set('display_errors', $previousDisplayErrors);
         }
+
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+
+        return response($content, 200, [
+            'Content-Type'        => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Content-Disposition' => 'attachment; filename="'.$filename.'.xlsx"',
+            'Content-Length'      => strlen($content),
+            'Cache-Control'       => 'no-store, no-cache, must-revalidate',
+            'Pragma'              => 'public',
+        ]);
     }
 
     public function generate($filename = null)
