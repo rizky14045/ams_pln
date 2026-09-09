@@ -29,15 +29,63 @@ class AssetExtracomtableController extends ApiController
 
     public function getAssets(Request $request)
     {
-        $assetExtracomtable = AssetExtracomptable::with('jenis', 'ruang', 'gedung', 'subjenis','latestPeriodeAsset')
-        ->paginate(10);
-        $data['assetExtracomtable'] = $assetExtracomtable;
-        return ResponseHelper::response(
-            'Berhasil mendapatkan data asset extracomptable', // messages
-            null, // errors
-            $data, // data
-            200 // status_code
-        );
+        try {
+            // 1. Base Query dengan Eager Loading
+            $query = AssetExtracomptable::with([
+                'jenis',
+                'ruang',
+                'gedung',
+                'subjenis',
+                'latestPeriodeAsset'
+            ]);
+
+            // 2. Filter / Search Global (Kode Asset, Nama Asset, Lantai, Gedung, Ruang, Jenis, Subjenis)
+            if ($request->has('search') && $request->search != '') {
+                $search = $request->search;
+
+                $query->where(function ($q) use ($search) {
+                    $q->where('kd_asset', 'like', "%{$search}%")
+                    ->orWhere('nama_asset', 'like', "%{$search}%")
+                    ->orWhere('lantai', 'like', "%{$search}%")
+                    // Filter Gedung
+                    ->orWhereHas('gedung', function ($g) use ($search) {
+                        $g->where('nama', 'like', "%{$search}%");
+                    })
+                    // Filter Ruang
+                    ->orWhereHas('ruang', function ($r) use ($search) {
+                        $r->where('nama_ruang', 'like', "%{$search}%");
+                    })
+                    // Filter Jenis
+                    ->orWhereHas('jenis', function ($j) use ($search) {
+                        $j->where('nama', 'like', "%{$search}%");
+                    })
+                    // Filter Subjenis
+                    ->orWhereHas('subjenis', function ($sj) use ($search) {
+                        $sj->where('nama', 'like', "%{$search}%");
+                    });
+                });
+            }
+
+            // 3. Eksekusi pagination dan append query string
+            $assetExtracomtable = $query->paginate(10)->appends($request->all());
+
+            $data['assetExtracomtable'] = $assetExtracomtable;
+
+            return ResponseHelper::response(
+                'Berhasil mendapatkan data asset extracomptable', // messages
+                null,                                             // errors
+                $data,                                            // data
+                200                                               // status_code
+            );
+
+        } catch (Exception $e) {
+            return ResponseHelper::response(
+                'Gagal mendapatkan data asset extracomptable',
+                $e->getMessage(),
+                null,
+                500
+            );
+        }
     }
 
     public function GetDetailAsset($code)

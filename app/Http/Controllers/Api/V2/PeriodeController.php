@@ -78,31 +78,81 @@ class PeriodeController extends ApiController
         }
     }
 
-    public function show($periodeId)
+    public function show(Request $request, $periodeId)
     {
-        $periode = Periode::find($periodeId);
-        $assetCount = PeriodeAsset::with('asset','asset.jenis','asset.ruang','asset.gedung','asset.subjenis','scanBy')->where('periode_id', $periodeId)->paginate(10);
+        try {
+            // 1. Cek keberadaan periode
+            $periode = Periode::find($periodeId);
 
-        $data = [
-            'periode' => $periode,
-            'asset_count' => $assetCount
-        ];
+            if (!$periode) {
+                return ResponseHelper::response(
+                    'Periode tidak ditemukan',
+                    null,
+                    null,
+                    404
+                );
+            }
 
-        if (!$periode) {
+            // 2. Base Query dengan Eager Loading
+            $query = PeriodeAsset::with([
+                'asset',
+                'asset.jenis',
+                'asset.ruang',
+                'asset.gedung',
+                'asset.subjenis',
+                'scanBy'
+            ])->where('periode_id', $periodeId);
+
+            // 3. Filter / Search Global (Kode Asset, Nama Asset, Gedung, Lantai, Ruang, Jenis, Subjenis)
+            if ($request->has('search') && $request->search != '') {
+                $search = $request->search;
+
+                $query->whereHas('asset', function ($q) use ($search) {
+                    $q->where('kd_asset', 'like', "%{$search}%")
+                    ->orWhere('nama_asset', 'like', "%{$search}%")
+                    ->orWhere('lantai', 'like', "%{$search}%")
+                    // Filter Gedung
+                    ->orWhereHas('gedung', function ($g) use ($search) {
+                        $g->where('nama', 'like', "%{$search}%");
+                    })
+                    // Filter Ruang
+                    ->orWhereHas('ruang', function ($r) use ($search) {
+                        $r->where('nama_ruang', 'like', "%{$search}%");
+                    })
+                    // Filter Jenis
+                    ->orWhereHas('jenis', function ($j) use ($search) {
+                        $j->where('nama', 'like', "%{$search}%");
+                    })
+                    // Filter Subjenis
+                    ->orWhereHas('subjenis', function ($sj) use ($search) {
+                        $sj->where('nama', 'like', "%{$search}%");
+                    });
+                });
+            }
+
+            // 4. Eksekusi pagination dan append query string
+            $assetCount = $query->paginate(10)->appends($request->all());
+
+            $data = [
+                'periode'     => $periode,
+                'asset_count' => $assetCount
+            ];
+
             return ResponseHelper::response(
-                'Periode tidak ditemukan', // messages
-                null, // errors
-                null, // data
-                404 // status_code
+                'Berhasil mendapatkan data periode',
+                null,
+                $data,
+                200
+            );
+
+        } catch (Exception $e) {
+            return ResponseHelper::response(
+                'Gagal mendapatkan data periode',
+                $e->getMessage(),
+                null,
+                500
             );
         }
-
-        return ResponseHelper::response(
-            'Berhasil mendapatkan data periode', // messages
-            null, // errors
-            $data, // data
-            200 // status_code
-        );
     }
 
 }
