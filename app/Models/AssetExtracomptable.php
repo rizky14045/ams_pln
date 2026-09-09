@@ -92,26 +92,6 @@ class AssetExtracomptable extends ArchiveableModel
         return $query;
     }
 
-    /**
-     * Sama seperti queryReport(), tapi dibatasi pada aset yang terdaftar
-     * di sebuah periode inventarisasi (tabel periode_asset).
-     */
-    public static function queryReportByPeriode($periodeId, $id_gedung = null, $lantai = null, $id_ruang = null)
-    {
-        $query = static::queryReport($id_gedung, $lantai, $id_ruang);
-        $query->join('periode_asset', 'periode_asset.asset_id', '=', 'asset_extracomptable.id')
-              ->where('periode_asset.periode_id', $periodeId)
-              // pecah jumlah berdasarkan status hasil scan / inventarisasi
-              // (alias 'periode_status' — hindari bentrok dengan accessor scan_status)
-              ->addSelect('periode_asset.status as periode_status')
-              ->groupBy('periode_asset.status')
-              ->orderBy('jenis_extracomptable.nama', 'asc')
-              ->orderBy('subjenis_extracomptable.nama', 'asc')
-              ->orderBy('periode_asset.status', 'asc');
-
-        return $query;
-    }
-
     public static function querySummaryByJenis()
     {
         return static::select([
