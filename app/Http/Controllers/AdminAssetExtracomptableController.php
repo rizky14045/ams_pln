@@ -51,13 +51,18 @@ use App\Traits\GetMasterOptions;
             $this->col[] = ["label"=>"Nama Asset","name"=>"nama_asset"];
             $this->col[] = [
                 "label" => "Status",
-                "name" => "status",
+                "name" => "id",
+                "sorting" => false,
                 "width" => 10,
                 "callback" => function($row) {
-                    $configs = config('asset.status_extracomptable');
-                    $config = array_first($configs, function($opt) use ($row) { return $opt['value'] == $row->status; });
-                    $class = !empty($config) ? $config['class'] : 'label-default';
-                    return "<span class='label {$class}'>{$row->status}</span>";
+                    // Status barang diambil dari status scan / inventarisasi terakhir.
+                    $scan = \App\Models\PeriodeAsset::where('asset_id', $row->id)
+                        ->whereNotNull('status')
+                        ->orderBy('tanggal_inventaris', 'desc')
+                        ->orderBy('id', 'desc')
+                        ->first();
+
+                    return \App\Models\AssetExtracomptable::scanStatusBadge($scan ? $scan->status : null);
                 }
             ];
             $this->col[] = [
@@ -96,7 +101,6 @@ use App\Traits\GetMasterOptions;
             $this->form[] = ['label'=>'Subjenis','name'=>'id_subjenis','type'=>'select2','validation'=>'required|integer|min:0','width'=>'col-sm-10','datatable'=>'jenis_extracomptable,id'];
             $this->form[] = ['label'=>'Nama Asset','name'=>'nama_asset','type'=>'text','validation'=>'required|min:1|max:255','width'=>'col-sm-10'];
             $this->form[] = ['label'=>'Tgl Masuk','name'=>'tgl_masuk','type'=>'date','validation'=>'required|date','width'=>'col-sm-10'];
-            $this->form[] = ['label'=>'Status','name'=>'status','type'=>'text','validation'=>'required|min:1|max:255','width'=>'col-sm-10'];
             $this->form[] = ['label'=>'Gambar','name'=>'gambar','type'=>'upload','validation'=>'required|image|max:3000','width'=>'col-sm-10','help'=>'File types support : JPG, JPEG, PNG, GIF, BMP'];
             $this->form[] = ['label'=>'Ref Request','name'=>'ref_id_request','type'=>'number','validation'=>'required|integer|min:0','width'=>'col-sm-10'];
             # END FORM DO NOT REMOVE THIS LINE
@@ -404,7 +408,25 @@ use App\Traits\GetMasterOptions;
 
         public function getDetail($id)
         {
-            $data['asset'] = $this->findAssetOrFail($id);
+            $asset = $this->findAssetOrFail($id);
+            $asset->load(['jenis', 'subjenis', 'gedung', 'ruang']);
+
+            $data['asset'] = $asset;
+            // Status barang = status scan / inventarisasi terakhir.
+            $data['latest_scan'] = \App\Models\PeriodeAsset::with('periode')
+                ->where('asset_id', $asset->id)
+                ->whereNotNull('status')
+                ->orderBy('tanggal_inventaris', 'desc')
+                ->orderBy('id', 'desc')
+                ->first();
+            // Log perubahan diambil dari riwayat scan barang.
+            $data['scan_histories'] = \App\Models\PeriodeAsset::with(['periode', 'scanBy'])
+                ->where('asset_id', $asset->id)
+                ->whereNotNull('status')
+                ->orderBy('tanggal_inventaris', 'desc')
+                ->orderBy('id', 'desc')
+                ->get();
+
             return view('asset-extracomptable/page-detail', $data);
         }
 
@@ -417,7 +439,6 @@ use App\Traits\GetMasterOptions;
             $data['page_title'] = "Add Asset Extra Comptable";
             $data['options_gedung'] = $this->getOptionsGedung();
             $data['options_jenis'] = $this->getOptionsJenis();
-            $data['options_status'] = $this->getOptionsStatusExtracomptable();
             if ($id_gedung) {
                 $data['options_lantai'] = $this->getOptionsLantai($id_gedung);
                 if ($lantai) {
@@ -439,7 +460,6 @@ use App\Traits\GetMasterOptions;
             $data['asset'] = $asset;
             $data['options_gedung'] = $this->getOptionsGedung();
             $data['options_jenis'] = $this->getOptionsJenis();
-            $data['options_status'] = $this->getOptionsStatusExtracomptable();
             $data['options_lantai'] = $this->getOptionsLantai($asset->id_gedung);
             $data['options_ruang'] = $this->getOptionsRuang($asset->id_gedung, $asset->lantai);
             $data['options_subjenis'] = $this->getOptionsSubJenis($asset->id_jenis);

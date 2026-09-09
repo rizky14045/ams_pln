@@ -279,7 +279,6 @@ class AssetExtracomptableController extends Controller
                 // 'kd_asset' => $asset->kd_asset,
                 'nama_asset' => $asset->nama_asset,
                 'tgl_masuk' => $asset->tgl_masuk,
-                'status' => $asset->status,
             ]);
         } else {
             return redirect()->route('AdminAssetExtracomptableControllerGetIndex');
@@ -302,9 +301,6 @@ class AssetExtracomptableController extends Controller
     protected function saveAsset(Request $req, AssetExtracomptable $asset)
     {
         $is_edit = (bool) $asset->exists;
-        $list_status = array_map(function($status) {
-            return $status['value'];
-        }, config('asset.status_extracomptable'));
 
         $this->validate($req, [
             'id_gedung' => 'required|exists:gedung,id',
@@ -315,7 +311,6 @@ class AssetExtracomptableController extends Controller
             'kd_asset' => 'required|unique:asset_extracomptable,kd_asset'.($is_edit? ','.$asset->id : ''),
             'nama_asset' => 'required',
             'tgl_masuk' => 'required|date',
-            'status' => 'required|in:'.implode(',', $list_status),
             'gambar' => 'required|image',
             // 'ref_id_request' => '',
         ]);
@@ -334,7 +329,10 @@ class AssetExtracomptableController extends Controller
         $asset->kd_asset = $req->get('kd_asset');
         $asset->nama_asset = $req->get('nama_asset');
         $asset->tgl_masuk = $req->get('tgl_masuk');
-        $asset->status = $req->get('status');
+        // Status barang tidak lagi diinput manual; diambil dari hasil scan/inventarisasi.
+        if (!$is_edit) {
+            $asset->status = '';
+        }
         $asset->gambar = $filename;
         $asset->ref_id_request = $req->get('ref_id_request') ?: null;
         $saved = $asset->save();

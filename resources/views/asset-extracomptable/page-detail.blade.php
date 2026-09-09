@@ -39,7 +39,19 @@
             </tr>
             <tr>
               <td width="200">Status</td>
-              <td><strong>{!! $asset->status !!}</strong></td>
+              <td>
+                {!! App\Models\AssetExtracomptable::scanStatusBadge($latest_scan ? $latest_scan->status : null) !!}
+                @if($latest_scan)
+                  <br>
+                  <small class="text-muted">
+                    Scan terakhir:
+                    {{ $latest_scan->tanggal_inventaris ? date('d/m/Y H:i', strtotime($latest_scan->tanggal_inventaris)) : '-' }}
+                    @if($latest_scan->periode)
+                      &middot; Periode {{ $latest_scan->periode->year }}
+                    @endif
+                  </small>
+                @endif
+              </td>
             </tr>
           </table>
         </div>
@@ -49,96 +61,44 @@
       </div>
     </div>
   @endcomponent
+
   @component('components.panel-form')
     @slot('title')
       <i class="fa fa-history"></i>
       <strong>Log Perubahan</strong>
+      <small class="text-muted">(riwayat scan / inventarisasi barang)</small>
     @endslot
     <div class="table-responsive">
-      <table id="histories" class="table table-bordered table-hover table-striped">
+      <table class="table table-bordered table-hover table-striped">
         <thead>
           <tr>
-            <th>Waktu</th>
-            <th>Foto</th>
-            <th>Pengguna</th>
-            <th>Nama Asset</th>
-            <th>Jenis</th>
-            <th>Sub Jenis</th>
-            <th>Lokasi</th>
+            <th width="60">No.</th>
+            <th>Periode</th>
             <th>Status</th>
+            <th>Tanggal Scan</th>
+            <th>Discan Oleh</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="log in histories">
-            <td width="120">@{{ date(log.time, 'DD-MM-YYYY, HH:mm') }}</td>
-            <td width="100">
-              <a class="link-image" :href="log.asset ? log.asset.url_image : '#'" target="_blank">
-                <img :src="log.asset ? log.asset.url_image : '#'" style="width: 100px;"/>
-              </a>
-            </td>
-            <td>@{{ log.user ? log.user.name : '- tidak diketahui -' }}</td>
-            <td>@{{ log.asset ? log.asset.nama_asset : '-' }}</td>
-            <td>@{{ log.asset && log.asset.jenis ? log.asset.jenis.nama : '-' }}</td>
-            <td>@{{ log.asset && log.asset.subjenis ? log.asset.subjenis.nama : '-' }}</td>
-            <td>
-              @{{ log.asset && log.asset.ruang ? log.asset.ruang.nama_ruang : '-' }}
-              /
-              @{{ log.asset ? log.asset.lantai : '-' }}
-              /
-              @{{ log.asset && log.asset.gedung ? log.asset.gedung.nama : '-' }}
-            </td>
-            <td>@{{ log.asset ? log.asset.status : '-' }}</td>
-          </tr>
-          <tr v-if="!histories.length">
-            <td colspan="10">
-              <div class="text-center" style="padding: 10px">
-                - Tidak ada log perubahan -
-              </div>
-            </td>
-          </tr>
+          @forelse($scan_histories as $i => $scan)
+            <tr>
+              <td>{{ $i + 1 }}</td>
+              <td>{{ $scan->periode ? $scan->periode->year : '-' }}</td>
+              <td>{!! App\Models\AssetExtracomptable::scanStatusBadge($scan->status) !!}</td>
+              <td>{{ $scan->tanggal_inventaris ? date('d/m/Y H:i', strtotime($scan->tanggal_inventaris)) : '-' }}</td>
+              <td>{{ $scan->scanBy ? $scan->scanBy->name : '-' }}</td>
+            </tr>
+          @empty
+            <tr>
+              <td colspan="5">
+                <div class="text-center" style="padding: 10px">
+                  - Belum ada riwayat scan -
+                </div>
+              </td>
+            </tr>
+          @endforelse
         </tbody>
       </table>
     </div>
   @endcomponent
-@endsection
-
-@section('styles')
-  @parent
-  <style>
-    .link-image:hover {
-      cursor: zoom-in: ;
-    }
-  </style>
-@endsection
-@section('scripts')
-  @parent
-  <script>
-    var urlHistories = "{{ route('asset-extracomptable::json-get-histories', $asset->getKey()) }}";
-    var history = new Vue({
-      el: '#histories',
-      data: {
-        histories: []
-      },
-      mounted: function () {
-        this.fetchHistories()
-      },
-      methods: {
-        fetchHistories: function () {
-          var self = this;
-          $.getJSON(urlHistories, {
-            type: ['create', 'update']
-          })
-          .done(function(res) {
-            self.histories = res.data
-          })
-          .fail(function() {
-            alert('Terjadi kesalahan saat mengambil data log perubahan.')
-          })
-        },
-        date: function(date, format) {
-          return moment(date).format(format)
-        }
-      }
-    });
-  </script>
 @endsection

@@ -92,6 +92,26 @@ class AssetExtracomptable extends ArchiveableModel
         return $query;
     }
 
+    /**
+     * Sama seperti queryReport(), tapi dibatasi pada aset yang terdaftar
+     * di sebuah periode inventarisasi (tabel periode_asset).
+     */
+    public static function queryReportByPeriode($periodeId, $id_gedung = null, $lantai = null, $id_ruang = null)
+    {
+        $query = static::queryReport($id_gedung, $lantai, $id_ruang);
+        $query->join('periode_asset', 'periode_asset.asset_id', '=', 'asset_extracomptable.id')
+              ->where('periode_asset.periode_id', $periodeId)
+              // pecah jumlah berdasarkan status hasil scan / inventarisasi
+              // (alias 'periode_status' — hindari bentrok dengan accessor scan_status)
+              ->addSelect('periode_asset.status as periode_status')
+              ->groupBy('periode_asset.status')
+              ->orderBy('jenis_extracomptable.nama', 'asc')
+              ->orderBy('subjenis_extracomptable.nama', 'asc')
+              ->orderBy('periode_asset.status', 'asc');
+
+        return $query;
+    }
+
     public static function querySummaryByJenis()
     {
         return static::select([
@@ -252,6 +272,81 @@ class AssetExtracomptable extends ArchiveableModel
     {
         // Mengambil 1 record PeriodeAsset terakhir berdasarkan id/created_at
         return $this->hasOne(PeriodeAsset::class, 'asset_id', 'id')->latest('id');
+    }
+
+    public function periodeAssets()
+    {
+        return $this->hasMany(PeriodeAsset::class, 'asset_id', 'id');
+    }
+
+    /**
+     * Scan / inventarisasi terakhir yang sudah memiliki status.
+     */
+    public function latestScan()
+    {
+        return $this->hasOne(PeriodeAsset::class, 'asset_id', 'id')
+            ->whereNotNull('status')
+            ->orderBy('tanggal_inventaris', 'desc')
+            ->orderBy('id', 'desc');
+    }
+
+    /**
+     * Seluruh riwayat scan barang (terbaru lebih dulu).
+     */
+    public function scanHistories()
+    {
+        return $this->hasMany(PeriodeAsset::class, 'asset_id', 'id')
+            ->whereNotNull('status')
+            ->orderBy('tanggal_inventaris', 'desc')
+            ->orderBy('id', 'desc');
+    }
+
+    /**
+     * Status barang diambil dari status scan terakhir.
+     * Mengembalikan null bila barang belum pernah discan.
+     */
+    public function getScanStatusAttribute()
+    {
+        $scan = $this->relationLoaded('latestScan') ? $this->getRelation('latestScan') : $this->latestScan;
+
+        return $scan ? $scan->status : null;
+    }
+
+    /**
+     * Render label status (dari hasil scan) menjadi HTML badge.
+     */
+    public static function scanStatusBadge($status)
+    {
+        if (!$status) {
+            return "<span class='label label-default'>Belum diinventarisasi</span>";
+        }
+
+        $configs = config('asset.status_extracomptable');
+        $config = array_first($configs, function ($opt) use ($status) {
+            return $opt['value'] == $status;
+        });
+
+        $class = !empty($config) ? $config['class'] : 'label-primary';
+        $label = !empty($config) ? $config['label'] : $status;
+
+        return "<span class='label {$class}'>".e($label)."</span>";
+    }
+
+    /**
+     * Label status scan dalam bentuk teks biasa (untuk export Excel dsb).
+     */
+    public static function scanStatusText($status)
+    {
+        if (!$status) {
+            return 'Belum diinventarisasi';
+        }
+
+        $configs = config('asset.status_extracomptable');
+        $config = array_first($configs, function ($opt) use ($status) {
+            return $opt['value'] == $status;
+        });
+
+        return !empty($config) ? $config['label'] : $status;
     }
 
 }

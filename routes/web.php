@@ -30,9 +30,15 @@ Route::group(['middleware' => 'cb-auth'], function() {
     Route::prefix('/asset/extracomptable')->name('asset-extracomptable::')->group(function() {
         Route::get('/{id}/histories.json', 'AssetExtracomptableController@getHistories')->name('json-get-histories');
 
-        Route::get('/report', 'AssetExtracomptableController@pageReport')->name('page-report');
-        Route::get('/report.json', 'AssetExtracomptableController@getJsonReport')->name('json-get-report');
-        Route::get('/download/report.{format}', 'AssetExtracomptableController@downloadReport')->name('download-report')->where('format', '(xlsx|csv)');
+        /*
+         | Halaman "Report Extra Comptable" dinonaktifkan sementara (tidak bisa diakses
+         | via sidebar maupun URL langsung). Logic controller & view TIDAK dihapus.
+         | Aktifkan kembali dengan meng-uncomment 3 baris di bawah + set menu
+         | "Report Extra Comptable" is_active = 1 pada tabel cms_menus.
+         */
+        // Route::get('/report', 'AssetExtracomptableController@pageReport')->name('page-report');
+        // Route::get('/report.json', 'AssetExtracomptableController@getJsonReport')->name('json-get-report');
+        // Route::get('/download/report.{format}', 'AssetExtracomptableController@downloadReport')->name('download-report')->where('format', '(xlsx|csv)');
 
         Route::get('/summary', 'AssetExtracomptableController@pageSummary')->name('page-summary');
         Route::get('/summary/jenis.json', 'AssetExtracomptableController@getJsonSummaryByJenis')->name('json-get-summary-by-jenis');
@@ -160,6 +166,23 @@ Route::group(['middleware' => 'cb-auth'], function() {
     Route::prefix('/pemeliharaan/aktiva-tetap')->name('pemeliharaan-aktiva-tetap::')->group(function() {
         Route::post('/create', 'PemeliharaanAktivaTetapController@postCreate')->name('post-create');
         Route::post('/edit/{id}', 'PemeliharaanAktivaTetapController@postEdit')->name('post-edit');
+    });
+
+    /**
+     * ----------------------------------------------------------------------------------------------
+     * Route Inventarisasi (Periode) Extra Comptable
+     * ----------------------------------------------------------------------------------------------
+     */
+    Route::prefix('/periode-inventarisasi')->name('periode-inventarisasi::')->group(function() {
+        Route::get('/', 'PeriodeInventarisasiController@index')->name('index');
+        Route::get('/list.json', 'PeriodeInventarisasiController@getJsonList')->name('json-list');
+        Route::get('/create', 'PeriodeInventarisasiController@formCreate')->name('form-create');
+        Route::post('/create', 'PeriodeInventarisasiController@postCreate')->name('post-create');
+        Route::post('/deletes', 'PeriodeInventarisasiController@deletes')->name('deletes');
+        Route::get('/{id}/export', 'PeriodeInventarisasiController@export')->name('export')->where('id', '[0-9]+');
+        Route::get('/{id}', 'PeriodeInventarisasiController@show')->name('show')->where('id', '[0-9]+');
+        Route::get('/{id}/edit', 'PeriodeInventarisasiController@formEdit')->name('form-edit')->where('id', '[0-9]+');
+        Route::post('/{id}/edit', 'PeriodeInventarisasiController@postEdit')->name('post-edit')->where('id', '[0-9]+');
     });
 
     /**

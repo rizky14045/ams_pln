@@ -93,15 +93,6 @@
         'label' => 'Nama Asset',
       ])
 
-      @include('partials.fields.select2', [
-        'name' => 'status',
-        'value' => prev_input('status'),
-        'required' => true,
-        'label' => 'Status Barang',
-        'options' => $options_status,
-        'emptyOption' => '-- Pilih Status Barang --'
-      ])
-
       @include('partials.fields.image', [
         'name' => 'gambar',
         'value' => prev_input('gambar'),
