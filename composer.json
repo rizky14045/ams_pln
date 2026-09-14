@@ -6,7 +6,9 @@
     "type": "project",
     "require": {
         "php": ">=5.6.4",
+        "barryvdh/laravel-cors": "^0.11.0",
         "crocodicstudio/crudbooster": "v5.4.0.8",
+        "fruitcake/laravel-cors": "^0.11.0",
         "intervention/image": "^2.4",
         "laraspell/asset-collector": "dev-master",
         "laravel/framework": "5.4.*",

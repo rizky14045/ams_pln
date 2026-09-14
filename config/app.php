@@ -181,6 +181,7 @@ return [
         Tymon\JWTAuth\Providers\JWTAuthServiceProvider::class,
         Milon\Barcode\BarcodeServiceProvider::class,
         Maatwebsite\Excel\ExcelServiceProvider::class,
+        Barryvdh\Cors\ServiceProvider::class,
     ],
 
     /*
