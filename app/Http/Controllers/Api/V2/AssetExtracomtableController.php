@@ -65,6 +65,12 @@ class AssetExtracomtableController extends ApiController
                     });
                 });
             }
+            if($request->has('date') && $request->date != '') {
+                $date = Carbon::parse($request->date)->format('Y-m-d');
+                $query->whereHas('periodeAssets', function ($q) use ($date) {
+                    $q->whereDate('tanggal_inventaris', $date);
+                });
+            }
 
             // 3. Eksekusi pagination dan append query string
             $assetExtracomtable = $query->paginate(10)->appends($request->all());

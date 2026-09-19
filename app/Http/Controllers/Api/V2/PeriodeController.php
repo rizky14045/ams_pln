@@ -129,6 +129,10 @@ class PeriodeController extends ApiController
                     });
                 });
             }
+            if ($request->has('date') && $request->date != '') {
+                $date = Carbon::parse($request->date)->format('Y-m-d');
+                $query->whereDate('tanggal_inventaris', $date);
+            }
 
             // 4. Eksekusi pagination dan append query string
             $assetCount = $query->paginate(10)->appends($request->all());
