@@ -198,4 +198,197 @@ class AssetExtracomtableController extends ApiController
         }
     }
 
+    public function createAsset(Request $request)
+    {
+        // 1. Validasi Input sesuai skema
+        $validator = Validator::make($request->all(), [
+            'periode'     => 'required',
+            'id_gedung'   => 'required|exists:gedung,id',
+            'lantai'      => 'required',
+            'id_ruang'    => 'required|exists:ruang,id',
+            'id_jenis'    => 'required|exists:jenis_extracomptable,id',
+            'id_subjenis' => 'required|exists:subjenis_extracomptable,id',
+            'nama_asset'  => 'required|string',
+            'kd_asset'    => 'required|string|unique:asset_extracomptable,kd_asset',
+            'status'      => 'required|string',
+            'gambar'      => 'required',
+        ]);
+
+        if ($validator->fails()) {
+            return ResponseHelper::response(
+                'Gagal menambahkan data asset',
+                $validator->errors(),
+                null,
+                422
+            );
+        }
+
+        // 2. Cek Keberadaan Periode
+        $periode = Periode::where('year', $request->periode)->first();
+        if (!$periode) {
+            $periode = Periode::find($request->periode);
+        }
+
+        if (!$periode) {
+            return ResponseHelper::response(
+                'Periode tidak ditemukan!',
+                null,
+                null,
+                404
+            );
+        }
+
+        // 3. Proses upload / penyimpanan gambar
+        $uploadPath = public_path('uploads/assets-extracomptable');
+        $filename = null;
+
+        try {
+            if ($request->hasFile('gambar')) {
+                $file = $request->file('gambar');
+                $ext = $file->getClientOriginalExtension() ?: 'jpg';
+                $filename = implode('-', [md5($request->kd_asset), date('ymd'), uniqid()]) . '.' . $ext;
+                $file->move($uploadPath, $filename);
+            } elseif (is_string($request->gambar) && !empty($request->gambar)) {
+                $gambarData = $request->gambar;
+                $ext = 'jpg';
+
+                if (preg_match('/^data:image\/(\w+);base64,/', $gambarData, $type)) {
+                    $gambarData = substr($gambarData, strpos($gambarData, ',') + 1);
+                    $ext = strtolower($type[1]);
+                    if ($ext === 'jpeg') {
+                        $ext = 'jpg';
+                    }
+                }
+
+                $gambarData = str_replace(' ', '+', $gambarData);
+                $imageContent = base64_decode($gambarData);
+                if ($imageContent === false) {
+                    return ResponseHelper::response(
+                        'Format base64 gambar tidak valid!',
+                        null,
+                        null,
+                        422
+                    );
+                }
+
+                if (!file_exists($uploadPath)) {
+                    mkdir($uploadPath, 0755, true);
+                }
+
+                $filename = implode('-', [md5($request->kd_asset), date('ymd'), uniqid()]) . '.' . $ext;
+                file_put_contents($uploadPath . '/' . $filename, $imageContent);
+            } else {
+                return ResponseHelper::response(
+                    'Gambar tidak valid!',
+                    null,
+                    null,
+                    422
+                );
+            }
+        } catch (Exception $e) {
+            return ResponseHelper::response(
+                'Gagal mengunggah gambar: ' . $e->getMessage(),
+                $e->getMessage(),
+                null,
+                500
+            );
+        }
+
+        // 4. Simpan Asset & PeriodeAsset dalam Database Transaction
+        DB::beginTransaction();
+
+        try {
+            $asset = new AssetExtracomptable();
+            $asset->id_gedung = $request->id_gedung;
+            $asset->lantai = $request->lantai;
+            $asset->id_ruang = $request->id_ruang;
+            $asset->id_jenis = $request->id_jenis;
+            $asset->id_subjenis = $request->id_subjenis;
+            $asset->kd_asset = $request->kd_asset;
+            $asset->nama_asset = $request->nama_asset;
+            $asset->tgl_masuk = Carbon::now()->toDateString();
+            $asset->status = $request->status;
+            $asset->gambar = $filename;
+            $asset->ref_id_request = $request->ref_id_request ?: null;
+            $asset->save();
+
+            // Log activity create
+            $userId = Auth::id();
+            try {
+                $asset->logCreate($userId);
+            } catch (Exception $logEx) {
+                // Abaikan jika log gagal agar pembuatan asset tidak terhambat
+            }
+
+            // Buat / update record PeriodeAsset untuk periode yang ditentukan
+            $periodeAsset = PeriodeAsset::firstOrNew([
+                'periode_id' => $periode->id,
+                'asset_id'   => $asset->id,
+            ]);
+            $periodeAsset->status = $request->status;
+            $periodeAsset->tanggal_inventaris = Carbon::now();
+            $periodeAsset->scan_by = $userId;
+            $periodeAsset->save();
+
+            DB::commit();
+
+            // Load relasi lengkap untuk output response
+            $asset->load(['jenis', 'ruang', 'gedung', 'subjenis', 'latestPeriodeAsset']);
+            $asset->url_gambar = $asset->urlGambar();
+
+            $data = [
+                'asset'              => $asset,
+                'assetExtracomtable' => $asset,
+                'periode_asset'      => $periodeAsset,
+            ];
+
+            return ResponseHelper::response(
+                'Berhasil menambahkan data asset',
+                null,
+                $data,
+                201
+            );
+
+        } catch (Exception $e) {
+            DB::rollBack();
+
+            // Hapus file gambar jika sudah terlanjur dibuat
+            if ($filename && file_exists($uploadPath . '/' . $filename)) {
+                @unlink($uploadPath . '/' . $filename);
+            }
+
+            return ResponseHelper::response(
+                'Gagal menambahkan data asset',
+                $e->getMessage(),
+                null,
+                500
+            );
+        }
+    }
+
+    public function getGedung(Request $request)
+    {
+        return app(MasterDataController::class)->getGedung($request);
+    }
+
+    public function getLantai(Request $request)
+    {
+        return app(MasterDataController::class)->getLantai($request);
+    }
+
+    public function getRuang(Request $request)
+    {
+        return app(MasterDataController::class)->getRuang($request);
+    }
+
+    public function getJenis(Request $request)
+    {
+        return app(MasterDataController::class)->getJenis($request);
+    }
+
+    public function getSubJenis(Request $request)
+    {
+        return app(MasterDataController::class)->getSubJenis($request);
+    }
+
 }

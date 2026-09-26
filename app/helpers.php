@@ -16,11 +16,13 @@ if (!function_exists('prev_input')) {
     }
 }
 
-function count_items($items) {
-    if (!is_array($items) && false === $items instanceof Countable) {
-        return 0;
-    }
+if (!function_exists('count_items')) {
+    function count_items($items) {
+        if (!is_array($items) && false === $items instanceof Countable) {
+            return 0;
+        }
 
-    return count($items);
+        return count($items);
+    }
 }
 
