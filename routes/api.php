@@ -205,12 +205,12 @@ Route::prefix('v2')->name('api.v2.')->namespace('V2')->group(function() {
      Route::post('login', 'AuthController@login')->name('login');
 
      // Master Data Lokasi & Klasifikasi Asset
-     Route::match(['get', 'post'], 'get-gedung', 'MasterDataController@getGedung')->name('get-gedung');
-     Route::match(['get', 'post'], 'get-lantai', 'MasterDataController@getLantai')->name('get-lantai');
-     Route::match(['get', 'post'], 'get-ruang', 'MasterDataController@getRuang')->name('get-ruang');
-     Route::match(['get', 'post'], 'get-jenis', 'MasterDataController@getJenis')->name('get-jenis');
-     Route::match(['get', 'post'], 'get-sub-jenis', 'MasterDataController@getSubJenis')->name('get-sub-jenis');
-     Route::match(['get', 'post'], 'get-subjenis', 'MasterDataController@getSubJenis')->name('get-subjenis.alias');
+     Route::get('get-gedung', 'MasterDataController@getGedung')->name('get-gedung');
+     Route::get('get-lantai', 'MasterDataController@getLantai')->name('get-lantai');
+     Route::get('get-ruang', 'MasterDataController@getRuang')->name('get-ruang');
+     Route::get('get-jenis', 'MasterDataController@getJenis')->name('get-jenis');
+     Route::get('get-sub-jenis', 'MasterDataController@getSubJenis')->name('get-sub-jenis');
+     Route::get('get-subjenis', 'MasterDataController@getSubJenis')->name('get-subjenis.alias');
 
      Route::middleware(['jwt.auth'])->group(function() {
         Route::post('logout', 'AuthController@logout')->name('logout');
