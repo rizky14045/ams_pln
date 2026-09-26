@@ -9,8 +9,12 @@ use App\Http\Controllers\Api\ApiController;
 use App\Http\Controllers\Concerns\Authenticator;
 use App\Http\Controllers\Controller;
 use App\Models\AssetExtracomptable;
+use App\Models\Gedung;
+use App\Models\JenisExtracomptable;
 use App\Models\Periode;
 use App\Models\PeriodeAsset;
+use App\Models\Ruang;
+use App\Models\SubJenisExtracomptable;
 use App\Models\User;
 use Carbon\Carbon;
 use Exception;
@@ -26,6 +30,47 @@ use Tymon\JWTAuth\Facades\JWTAuth;
 
 class AssetExtracomtableController extends ApiController
 {
+
+    public function getKodeAsset(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'id_gedung' => 'required|exists:gedung,id',
+            'lantai' => 'required',
+            'id_ruang' => 'required|exists:ruang,id',
+            'id_jenis' => 'required|exists:jenis_extracomptable,id',
+            'id_subjenis' => 'required|exists:subjenis_extracomptable,id',
+            'tgl_masuk' => 'nullable|date',
+        ]);
+
+        if ($validator->fails()) {
+            return ResponseHelper::response(
+                'Gagal membuat kode asset',
+                $validator->errors(),
+                null,
+                422
+            );
+        }
+
+        $date = $request->get('tgl_masuk')
+            ? new \DateTime($request->get('tgl_masuk'))
+            : null;
+
+        $kdAsset = AssetExtracomptable::generateKodeAsset(
+            Gedung::findOrFail($request->get('id_gedung')),
+            $request->get('lantai'),
+            Ruang::findOrFail($request->get('id_ruang')),
+            JenisExtracomptable::findOrFail($request->get('id_jenis')),
+            SubJenisExtracomptable::findOrFail($request->get('id_subjenis')),
+            $date
+        );
+
+        return ResponseHelper::response(
+            'Berhasil membuat kode asset',
+            null,
+            ['kd_asset' => $kdAsset],
+            200
+        );
+    }
 
     public function getAssets(Request $request)
     {
