@@ -221,7 +221,7 @@ Route::prefix('v2')->name('api.v2.')->namespace('V2')->group(function() {
 
         Route::get('assets', 'AssetExtracomtableController@getAssets')->name('assets.get');
         Route::post('assets', 'AssetExtracomtableController@createAsset')->name('assets.create');
-        Route::post('assets/create', 'AssetExtracomtableController@createAsset')->name('assets.create.alias');
+        Route::post('assets/create/save', 'AssetExtracomtableController@createAsset')->name('assets.create.alias');
         Route::get('assets/{code}', 'AssetExtracomtableController@GetDetailAsset')->name('assets.detail');
         Route::post('assets/update-status', 'AssetExtracomtableController@updateStatus')->name('assets.update-status');
      });
