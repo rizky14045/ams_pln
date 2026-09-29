@@ -33,6 +33,8 @@
     </div>
   </div>
 </div>
+
+@include('periode-inventarisasi.components.export-modal')
 @endsection
 
 @section('styles')
@@ -94,4 +96,5 @@
       deletes([id]);
     });
   </script>
+  @include('periode-inventarisasi.components.export-modal-scripts')
 @endsection

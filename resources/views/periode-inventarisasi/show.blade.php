@@ -10,10 +10,12 @@
     <a href="{{ route('periode-inventarisasi::form-edit', [$periode->id]) }}" class="btn btn-primary">
       <i class="fa fa-pencil"></i> Edit Periode
     </a>
-    <a href="{{ route('periode-inventarisasi::export', [$periode->id]) }}" class="btn btn-success">
+    <button type="button" class="btn btn-success btn-export-periode" data-periode-id="{{ $periode->id }}" data-periode-year="{{ $periode->year }}">
       <i class="fa fa-file-excel-o"></i> Export Excel
-    </a>
+    </button>
   </div>
+
+  @include('periode-inventarisasi.components.export-modal')
 
   <div class="row">
     <div class="col-sm-4">
@@ -89,4 +91,9 @@
       {!! $pagination->appends(request()->except('page'))->render() !!}
     </div>
   </div>
+@endsection
+
+@section('scripts')
+  @parent
+  @include('periode-inventarisasi.components.export-modal-scripts')
 @endsection

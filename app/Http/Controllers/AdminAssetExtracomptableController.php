@@ -31,12 +31,15 @@ use App\Traits\GetMasterOptions;
             $this->button_action_style = "button_icon";
             $this->button_add = true;
             $this->button_edit = true;
-            $this->button_delete = true;
+            // Tombol Hapus bawaan CB dimatikan — diganti tombol "Hapus dari
+            // Inventarisasi" / "Sertakan Lagi" pada kolom Inventarisasi di bawah
+            // (lihat getDelete()/postActionSelected() untuk penjelasan lengkap).
+            $this->button_delete = false;
             $this->button_detail = true;
             $this->button_show = true;
             $this->button_filter = true;
             $this->button_import = true;
-            $this->button_export = true;
+            $this->button_export = false;
             $this->table = "asset_extracomptable";
             # END CONFIGURATION DO NOT REMOVE THIS LINE
 
@@ -63,6 +66,39 @@ use App\Traits\GetMasterOptions;
                         ->first();
 
                     return \App\Models\AssetExtracomptable::scanStatusBadge($scan ? $scan->status : null);
+                }
+            ];
+            $this->col[] = [
+                // Kolom ini menggantikan tombol Hapus bawaan CB (dimatikan di atas):
+                // - asset disertakan -> tombol "Hapus dari Inventarisasi"
+                // - asset sudah dihapus -> tombol berubah jadi "Sertakan Lagi"
+                "label" => "Inventarisasi",
+                "name" => "id",
+                "sorting" => false,
+                "width" => 190,
+                "callback" => function($row) {
+                    $asset = AssetExtracomptable::find($row->id);
+                    if (!$asset) return '-';
+
+                    if ($asset->isExcludedFromInventarisasi()) {
+                        $badge = "<span class='label label-default'>Tidak disertakan</span>";
+                        $url = route('asset-extracomptable::post-aktifkan-inventarisasi', $asset->id);
+                        $confirm = "Sertakan lagi asset ini pada inventarisasi baru berikutnya?";
+                        $btn = "<button type='submit' class='btn btn-success btn-xs'><i class='fa fa-check'></i> Sertakan Lagi</button>";
+                    } else {
+                        $badge = "<span class='label label-success'>Disertakan</span>";
+                        $url = route('asset-extracomptable::post-nonaktifkan-inventarisasi', $asset->id);
+                        $confirm = "Hapus asset ini dari inventarisasi? Data & riwayat tetap tersimpan dan tampil normal di daftar/histori, hanya tidak ikut disertakan pada inventarisasi baru berikutnya. Lanjutkan?";
+                        $btn = "<button type='submit' class='btn btn-warning btn-xs'><i class='fa fa-trash'></i> Hapus dari Inventarisasi</button>";
+                    }
+
+                    return "
+                        {$badge}
+                        <form method='POST' action='{$url}' style='margin-top:4px' onsubmit=\"return confirm('{$confirm}')\">
+                            ".csrf_field()."
+                            {$btn}
+                        </form>
+                    ";
                 }
             ];
             $this->col[] = [
@@ -404,6 +440,67 @@ use App\Traits\GetMasterOptions;
         public function hook_after_delete($id) {
             //Your code here
 
+        }
+
+        /*
+        | ----------------------------------------------------------------------
+        | Override tombol "Hapus" bawaan CrudBooster
+        | ----------------------------------------------------------------------
+        | Tombol Hapus (baris & bulk action) di halaman ini SENGAJA tidak lagi
+        | menghapus data apa pun. "Hapus" di sini berarti "kecualikan dari
+        | inventarisasi baru" — asset tetap tersimpan & tampil normal di semua
+        | tempat (list, detail, histori, laporan), cuma tidak ikut disertakan
+        | saat periode inventarisasi baru dibuat/di-sync berikutnya.
+        |
+        */
+        public function getDelete($id)
+        {
+            $this->cbLoader();
+
+            if (!\CRUDBooster::isDelete() && $this->global_privilege == false) {
+                \CRUDBooster::redirect(\CRUDBooster::adminPath(), trans('crudbooster.denied_access'));
+            }
+
+            $asset = AssetExtracomptable::findOrFail($id);
+            $asset->excludeFromInventarisasi(\CB::myId());
+
+            $url = request('return_url') ?: \CRUDBooster::referer();
+
+            \CRUDBooster::redirect(
+                $url,
+                "Asset '{$asset->kd_asset}' dihapus dari inventarisasi. Data tetap tersimpan dan tampil normal di daftar & histori; hanya tidak ikut disertakan pada inventarisasi baru berikutnya.",
+                'success'
+            );
+        }
+
+        public function postActionSelected()
+        {
+            if (request('button_name') !== 'delete') {
+                return parent::postActionSelected();
+            }
+
+            $this->cbLoader();
+
+            $idSelected = (array) request('checkbox');
+            if (!$idSelected) {
+                return redirect()->back()->with(['message_type' => 'warning', 'message' => 'Pilih minimal 1 data!']);
+            }
+
+            if (!\CRUDBooster::isDelete()) {
+                \CRUDBooster::redirect(\CRUDBooster::adminPath(), trans('crudbooster.denied_access'));
+            }
+
+            $now = now();
+            DB::table('asset_extracomptable')->whereIn('id', $idSelected)->update([
+                'nonaktif_inventarisasi_at' => $now,
+                'nonaktif_inventarisasi_by' => \CB::myId(),
+                'updated_at' => $now,
+            ]);
+
+            return redirect()->back()->with([
+                'message_type' => 'success',
+                'message' => count($idSelected).' asset dihapus dari inventarisasi. Data tetap tersimpan dan tampil normal di daftar & histori; hanya tidak ikut disertakan pada inventarisasi baru berikutnya.',
+            ]);
         }
 
         public function getDetail($id)

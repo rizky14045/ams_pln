@@ -329,4 +329,54 @@ class AssetExtracomptable extends ArchiveableModel
         return !empty($config) ? $config['label'] : $status;
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | "Hapus" khusus inventarisasi
+    |--------------------------------------------------------------------------
+    | Asset tetap tampil normal di semua tempat (list, detail, histori, laporan).
+    | Yang berubah hanya: asset ini tidak lagi disertakan saat periode
+    | inventarisasi BARU dibuat / di-sync (lihat App\Services\PeriodeService).
+    | Periode yang sudah ada (lama) tidak berubah sama sekali.
+    */
+
+    /**
+     * Scope: hanya asset yang masih disertakan pada inventarisasi baru.
+     */
+    public function scopeActiveForInventarisasi($query)
+    {
+        return $query->whereNull('nonaktif_inventarisasi_at');
+    }
+
+    public function isExcludedFromInventarisasi()
+    {
+        return !is_null($this->nonaktif_inventarisasi_at);
+    }
+
+    /**
+     * Tandai asset supaya tidak disertakan pada inventarisasi baru berikutnya.
+     */
+    public function excludeFromInventarisasi($userId = null)
+    {
+        $this->nonaktif_inventarisasi_at = now();
+        $this->nonaktif_inventarisasi_by = $userId;
+
+        return $this->save();
+    }
+
+    /**
+     * Sertakan lagi asset ini pada inventarisasi baru berikutnya.
+     */
+    public function includeInInventarisasi()
+    {
+        $this->nonaktif_inventarisasi_at = null;
+        $this->nonaktif_inventarisasi_by = null;
+
+        return $this->save();
+    }
+
+    public function nonaktifInventarisasiByUser()
+    {
+        return $this->belongsTo(User::class, 'nonaktif_inventarisasi_by', 'id');
+    }
+
 }

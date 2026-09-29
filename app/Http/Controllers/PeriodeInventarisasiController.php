@@ -44,7 +44,7 @@ class PeriodeInventarisasiController extends Controller
     public function formCreate()
     {
         $data['page_title'] = 'Tambah Periode Inventarisasi';
-        $data['total_asset'] = AssetExtracomptable::count();
+        $data['total_asset'] = AssetExtracomptable::activeForInventarisasi()->count();
 
         return view('periode-inventarisasi.form-create', $data);
     }
@@ -85,7 +85,7 @@ class PeriodeInventarisasiController extends Controller
 
         $data['page_title'] = 'Edit Periode Inventarisasi';
         $data['periode'] = $periode;
-        $data['total_asset'] = AssetExtracomptable::count();
+        $data['total_asset'] = AssetExtracomptable::activeForInventarisasi()->count();
         $data['total_slot'] = PeriodeAsset::where('periode_id', $periode->id)->count();
 
         return view('periode-inventarisasi.form-edit', $data);
@@ -138,15 +138,55 @@ class PeriodeInventarisasiController extends Controller
     }
 
     /**
-     * Export rekap inventarisasi periode ke Excel.
-     * Format kolom sama dengan halaman Report Extra Comptable, namun
-     * dipecah per sheet berdasarkan Ruang (judul sheet = nama ruang).
+     * Daftar ruangan (beserta jumlah aset) untuk UI pemilihan ruangan saat export.
      */
-    public function export($id)
+    public function getJsonRooms($id)
     {
         $periode = Periode::findOrFail($id);
+        $rooms = (new \App\Reports\ExcelInventarisasiExtracomptablePerRuang($periode))->rooms();
 
-        return (new \App\Reports\ExcelInventarisasiExtracomptablePerRuang($periode))->download();
+        return response()->json([
+            'status' => 'success',
+            'data' => $rooms,
+        ]);
+    }
+
+    /**
+     * Export rekap inventarisasi periode ke Excel — 1 baris per barang,
+     * dipecah per sheet berdasarkan Ruang (judul sheet = nama ruang).
+     *
+     * Bisa dipilih ruangan tertentu lewat query string `ruang_id[]` (isi tiap
+     * elemen boleh beberapa id dipisah koma — 1 grup ruang bernama sama).
+     * Kalau tidak ada `ruang_id` yang valid, export mencakup SEMUA ruangan.
+     */
+    public function export(Request $request, $id)
+    {
+        $periode = Periode::findOrFail($id);
+        $ruangIds = $this->parseRuangIdsFromRequest($request);
+
+        return (new \App\Reports\ExcelInventarisasiExtracomptablePerRuang($periode, $ruangIds))->download();
+    }
+
+    /**
+     * Uraikan parameter `ruang_id[]` (tiap elemen bisa berisi beberapa id
+     * dipisah koma, hasil dari 1 checkbox ruangan yang digabung per-nama)
+     * menjadi array id ruang flat. Null kalau tidak ada filter (= semua ruangan).
+     */
+    protected function parseRuangIdsFromRequest(Request $request)
+    {
+        $raw = (array) $request->get('ruang_id', []);
+        $ids = [];
+
+        foreach ($raw as $item) {
+            foreach (explode(',', $item) as $piece) {
+                $piece = trim($piece);
+                if ($piece !== '' && is_numeric($piece)) {
+                    $ids[] = (int) $piece;
+                }
+            }
+        }
+
+        return $ids ? array_values(array_unique($ids)) : null;
     }
 
     /**
@@ -235,11 +275,10 @@ class PeriodeInventarisasiController extends Controller
                 'format' => function ($val, $row) {
                     $urlShow = route('periode-inventarisasi::show', $row->id);
                     $urlEdit = route('periode-inventarisasi::form-edit', $row->id);
-                    $urlExport = route('periode-inventarisasi::export', $row->id);
 
                     return "
                         <a class='btn btn-info btn-xs' href='{$urlShow}'><i class='fa fa-list'></i> Detail</a>
-                        <a class='btn btn-success btn-xs' href='{$urlExport}'><i class='fa fa-file-excel-o'></i> Excel</a>
+                        <button type='button' class='btn btn-success btn-xs btn-export-periode' data-periode-id='{$row->id}' data-periode-year='{$row->year}'><i class='fa fa-file-excel-o'></i> Excel</button>
                         <a class='btn btn-primary btn-xs btn-edit' href='{$urlEdit}'><i class='fa fa-pencil'></i> Edit</a>
                         <a class='btn btn-danger btn-xs btn-delete'><i class='fa fa-trash'></i> Hapus</a>
                     ";

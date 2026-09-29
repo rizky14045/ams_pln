@@ -62,6 +62,9 @@ class PeriodeService
     /**
      * Insert baris periode_asset (status = null) untuk setiap asset extra
      * comptable yang belum punya slot pada periode ini.
+     * Asset yang ditandai "nonaktif inventarisasi" (lihat
+     * AssetExtracomptable::excludeFromInventarisasi()) dilewati — tetap
+     * tampil di tempat lain, hanya tidak ikut periode baru/hasil sync.
      * Batch insert per 1.000 baris — sama seperti API.
      *
      * @param  \App\Models\Periode  $periode
@@ -73,7 +76,7 @@ class PeriodeService
             ->pluck('asset_id')
             ->all();
 
-        $query = AssetExtracomptable::query();
+        $query = AssetExtracomptable::query()->activeForInventarisasi();
         if (!empty($existingAssetIds)) {
             $query->whereNotIn('id', $existingAssetIds);
         }
