@@ -21,6 +21,13 @@ class ExcelInventarisasiExtracomptablePerRuang
 {
     protected $periode;
 
+    /**
+     * Daftar id ruang yang mau di-export. null = semua ruangan pada periode ini.
+     *
+     * @var int[]|null
+     */
+    protected $ruangFilter;
+
     protected $columns = [
         'no'           => ['label' => 'No.', 'format' => null],       // diisi di constructor
         'gedung'       => ['label' => 'Gedung'],
@@ -35,9 +42,14 @@ class ExcelInventarisasiExtracomptablePerRuang
         'scan_by'      => ['label' => 'Discan Oleh', 'format' => null],
     ];
 
-    public function __construct(Periode $periode)
+    /**
+     * @param  \App\Models\Periode  $periode
+     * @param  int[]|null  $ruangFilter  Id ruang yang mau di-export. null/kosong = semua ruangan.
+     */
+    public function __construct(Periode $periode, array $ruangFilter = null)
     {
         $this->periode = $periode;
+        $this->ruangFilter = (!empty($ruangFilter)) ? array_map('intval', $ruangFilter) : null;
 
         $this->columns['no']['format'] = function ($val, $row, $i) {
             return $i + 1;
@@ -55,7 +67,36 @@ class ExcelInventarisasiExtracomptablePerRuang
 
     public function getDefaultFilename()
     {
-        return 'inventarisasi-extracomptable-'.$this->periode->year.'_'.date('ymdhis');
+        $suffix = $this->ruangFilter ? '-'.count($this->ruangFilter).'-ruang' : '';
+
+        return 'inventarisasi-extracomptable-'.$this->periode->year.$suffix.'_'.date('ymdhis');
+    }
+
+    /**
+     * Daftar ruangan (sudah digabung per nama) yang punya aset pada periode
+     * ini, beserta jumlah asetnya — dipakai untuk UI pemilihan ruangan saat
+     * export ("pilih ruangan" / "pilih semua ruangan").
+     *
+     * @return array<int, array{ids: int[], name: string, jumlah_aset: int}>
+     */
+    public function rooms()
+    {
+        $groups = $this->getRuangGroups();
+
+        return array_map(function ($group) {
+            $jumlah = DB::table('periode_asset')
+                ->join('asset_extracomptable', 'asset_extracomptable.id', '=', 'periode_asset.asset_id')
+                ->where('periode_asset.periode_id', $this->periode->id)
+                ->whereNull('asset_extracomptable.deleted_at')
+                ->whereIn('asset_extracomptable.id_ruang', $group['ids'])
+                ->count();
+
+            return [
+                'ids' => $group['ids'],
+                'name' => $group['name'],
+                'jumlah_aset' => $jumlah,
+            ];
+        }, $groups);
     }
 
     /**
@@ -221,13 +262,16 @@ class ExcelInventarisasiExtracomptablePerRuang
      */
     protected function getRuangGroups()
     {
-        $ruangIds = DB::table('periode_asset')
+        $query = DB::table('periode_asset')
             ->join('asset_extracomptable', 'asset_extracomptable.id', '=', 'periode_asset.asset_id')
             ->where('periode_asset.periode_id', $this->periode->id)
-            ->whereNull('asset_extracomptable.deleted_at')
-            ->distinct()
-            ->pluck('asset_extracomptable.id_ruang')
-            ->all();
+            ->whereNull('asset_extracomptable.deleted_at');
+
+        if ($this->ruangFilter !== null) {
+            $query->whereIn('asset_extracomptable.id_ruang', $this->ruangFilter);
+        }
+
+        $ruangIds = $query->distinct()->pluck('asset_extracomptable.id_ruang')->all();
 
         $ruangs = Ruang::withTrashed()
             ->whereIn('id', $ruangIds)

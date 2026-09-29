@@ -348,6 +348,39 @@ class AssetExtracomptableController extends Controller
         return $saved;
     }
 
+    /**
+     * "Hapus" khusus inventarisasi — asset TETAP tampil normal di semua
+     * halaman (list, detail, histori, laporan). Cuma dikecualikan dari
+     * periode inventarisasi baru yang dibuat/di-sync setelah ini.
+     */
+    public function postNonaktifkanInventarisasi(Request $req, $id)
+    {
+        $asset = AssetExtracomptable::findOrFail($id);
+        $asset->excludeFromInventarisasi(\CB::myId());
+
+        // Halaman ini pakai layout CrudBooster, flash message-nya lewat
+        // Session::get('message') / 'message_type' (bukan key 'alert-*').
+        return redirect()->back()->with([
+            'message_type' => 'success',
+            'message' => "Asset '{$asset->kd_asset}' dihapus dari inventarisasi. Data tetap tersimpan dan tampil normal di daftar & histori; hanya tidak ikut disertakan pada inventarisasi baru berikutnya.",
+        ]);
+    }
+
+    /**
+     * Kebalikan dari nonaktifkan-inventarisasi: sertakan lagi asset ini
+     * pada periode inventarisasi baru berikutnya.
+     */
+    public function postAktifkanInventarisasi(Request $req, $id)
+    {
+        $asset = AssetExtracomptable::findOrFail($id);
+        $asset->includeInInventarisasi();
+
+        return redirect()->back()->with([
+            'message_type' => 'info',
+            'message' => "Asset '{$asset->kd_asset}' disertakan lagi pada inventarisasi baru berikutnya.",
+        ]);
+    }
+
     public function jsonGetDetailAsset(Request $req, $kd_asset)
     {
         $asset = AssetExtracomptable::with(['jenis', 'subjenis', 'gedung', 'ruang'])

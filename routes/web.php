@@ -61,6 +61,11 @@ Route::group(['middleware' => 'cb-auth'], function() {
 
         Route::post('/create', 'AssetExtracomptableController@postCreate')->name('post-create');
         Route::post('/edit/{id}', 'AssetExtracomptableController@postEdit')->name('post-edit');
+
+        // "Hapus" khusus inventarisasi: asset tetap tampil di mana pun, hanya
+        // tidak ikut disertakan saat periode inventarisasi baru dibuat/di-sync.
+        Route::post('/{id}/nonaktifkan-inventarisasi', 'AssetExtracomptableController@postNonaktifkanInventarisasi')->name('post-nonaktifkan-inventarisasi')->where('id', '[0-9]+');
+        Route::post('/{id}/aktifkan-inventarisasi', 'AssetExtracomptableController@postAktifkanInventarisasi')->name('post-aktifkan-inventarisasi')->where('id', '[0-9]+');
     });
 
     Route::prefix('/asset/aktiva-tetap')->name('asset-aktiva-tetap::')->group(function() {
@@ -179,6 +184,7 @@ Route::group(['middleware' => 'cb-auth'], function() {
         Route::get('/create', 'PeriodeInventarisasiController@formCreate')->name('form-create');
         Route::post('/create', 'PeriodeInventarisasiController@postCreate')->name('post-create');
         Route::post('/deletes', 'PeriodeInventarisasiController@deletes')->name('deletes');
+        Route::get('/{id}/rooms.json', 'PeriodeInventarisasiController@getJsonRooms')->name('json-rooms')->where('id', '[0-9]+');
         Route::get('/{id}/export', 'PeriodeInventarisasiController@export')->name('export')->where('id', '[0-9]+');
         Route::get('/{id}', 'PeriodeInventarisasiController@show')->name('show')->where('id', '[0-9]+');
         Route::get('/{id}/edit', 'PeriodeInventarisasiController@formEdit')->name('form-edit')->where('id', '[0-9]+');

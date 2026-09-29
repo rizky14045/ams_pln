@@ -53,6 +53,27 @@
                 @endif
               </td>
             </tr>
+            <tr>
+              <td width="200">Inventarisasi</td>
+              <td>
+                @if($asset->isExcludedFromInventarisasi())
+                  <span class="label label-default">Tidak disertakan</span>
+                  <small class="text-muted">
+                    sejak {{ date('d/m/Y H:i', strtotime($asset->nonaktif_inventarisasi_at)) }}
+                  </small>
+                  <form method="POST" action="{{ route('asset-extracomptable::post-aktifkan-inventarisasi', $asset->id) }}" style="display:inline-block;margin-left:8px" onsubmit="return confirm('Sertakan lagi asset ini pada inventarisasi baru berikutnya?')">
+                    {!! csrf_field() !!}
+                    <button type="submit" class="btn btn-success btn-xs"><i class="fa fa-check"></i> Sertakan Lagi</button>
+                  </form>
+                @else
+                  <span class="label label-success">Disertakan</span>
+                  <form method="POST" action="{{ route('asset-extracomptable::post-nonaktifkan-inventarisasi', $asset->id) }}" style="display:inline-block;margin-left:8px" onsubmit="return confirm('Hapus asset ini dari inventarisasi? Data & riwayat tetap tersimpan dan tampil normal di daftar/histori, hanya tidak ikut disertakan pada inventarisasi baru berikutnya. Lanjutkan?')">
+                    {!! csrf_field() !!}
+                    <button type="submit" class="btn btn-warning btn-xs"><i class="fa fa-trash"></i> Hapus dari Inventarisasi</button>
+                  </form>
+                @endif
+              </td>
+            </tr>
           </table>
         </div>
       </div>
