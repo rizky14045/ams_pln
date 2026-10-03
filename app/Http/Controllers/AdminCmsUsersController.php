@@ -25,6 +25,9 @@ class AdminCmsUsersController extends \crocodicstudio\crudbooster\controllers\CB
         $this->col[] = array("label"=>"Privilege","name"=>"id_cms_privileges","join"=>"cms_privileges,name");
         $this->col[] = array("label"=>"Group","name"=>"id_user_group","join"=>"user_group,name");
         // $this->col[] = array("label"=>"Karyawan","name"=>"id_karyawan","join"=>"karyawan,nama");
+		$this->col[] = array("label"=>"Akses Web","name"=>"akses_web","callback"=>function($row){
+			return $row->akses_web ? "<span class='label label-success'>Diizinkan</span>" : "<span class='label label-default'>Tidak</span>";
+		});
 		$this->col[] = array("label"=>"Photo","name"=>"photo","image"=>1);
 		# END COLUMNS DO NOT REMOVE THIS LINE
 
@@ -37,6 +40,7 @@ class AdminCmsUsersController extends \crocodicstudio\crudbooster\controllers\CB
 		// $this->form[] = array("label"=>"Karyawan","name"=>"id_karyawan","type"=>"select","datatable"=>"karyawan,nama",'required'=>false);
         $this->form[] = array("label"=>"Group","name"=>"id_user_group","type"=>"select","datatable"=>"user_group,name",'required'=>true);
 		$this->form[] = array("label"=>"Password","name"=>"password","type"=>"password","help"=>"Please leave empty if not change");
+		$this->form[] = array("label"=>"Boleh Akses Web","name"=>"akses_web","type"=>"radio","dataenum"=>"1|Ya;0|Tidak","help"=>"Whitelist: hanya user 'Ya' yang bisa login ke web admin.");
 		# END FORM DO NOT REMOVE THIS LINE
 
 	}
@@ -48,10 +52,16 @@ class AdminCmsUsersController extends \crocodicstudio\crudbooster\controllers\CB
 		$this->button_show    = FALSE;
 		$this->button_add     = FALSE;
 		$this->button_delete  = FALSE;
-		$this->hide_form 	  = ['id_cms_privileges'];
+		$this->hide_form 	  = ['id_cms_privileges','akses_web'];
 
 		$data['page_title'] = trans("crudbooster.label_button_profile");
 		$data['row']        = CRUDBooster::first('cms_users',CRUDBooster::myId());
 		$this->cbView('crudbooster::default.form',$data);
+	}
+
+	public function hook_before_edit(&$postdata, $id) {
+		if ((int) $id === (int) CRUDBooster::myId()) {
+			$postdata['akses_web'] = 1;
+		}
 	}
 }
