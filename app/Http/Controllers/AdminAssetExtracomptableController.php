@@ -72,6 +72,14 @@ use App\Traits\GetMasterOptions;
                 // Kolom ini menggantikan tombol Hapus bawaan CB (dimatikan di atas):
                 // - asset disertakan -> tombol "Hapus dari Inventarisasi"
                 // - asset sudah dihapus -> tombol berubah jadi "Sertakan Lagi"
+                //
+                // PENTING: seluruh baris tabel index CB sudah dibungkus <form
+                // id='form-table' action='.../action-selected'> bawaan CB (bulk
+                // action). <form> tidak boleh bersarang di HTML — kalau kolom ini
+                // ikut render <form>, browser mengabaikannya dan tombol malah
+                // submit form-table (=> "Please select at least one data!", tanpa
+                // confirm popup). Jadi di sini cuma <button> + data-attribute,
+                // dikirim lewat AJAX (lihat script_js di bawah), TANPA <form>.
                 "label" => "Inventarisasi",
                 "name" => "id",
                 "sorting" => false,
@@ -80,24 +88,28 @@ use App\Traits\GetMasterOptions;
                     $asset = AssetExtracomptable::find($row->id);
                     if (!$asset) return '-';
 
+                    $token = csrf_token();
+
                     if ($asset->isExcludedFromInventarisasi()) {
                         $badge = "<span class='label label-default'>Tidak disertakan</span>";
                         $url = route('asset-extracomptable::post-aktifkan-inventarisasi', $asset->id);
-                        $confirm = "Sertakan lagi asset ini pada inventarisasi baru berikutnya?";
-                        $btn = "<button type='submit' class='btn btn-success btn-xs'><i class='fa fa-check'></i> Sertakan Lagi</button>";
+                        $confirm = e('Sertakan lagi asset ini pada inventarisasi baru berikutnya?');
+                        $btnClass = 'btn btn-success btn-xs';
+                        $btnLabel = "<i class='fa fa-check'></i> Sertakan Lagi";
                     } else {
                         $badge = "<span class='label label-success'>Disertakan</span>";
                         $url = route('asset-extracomptable::post-nonaktifkan-inventarisasi', $asset->id);
-                        $confirm = "Hapus asset ini dari inventarisasi? Data & riwayat tetap tersimpan dan tampil normal di daftar/histori, hanya tidak ikut disertakan pada inventarisasi baru berikutnya. Lanjutkan?";
-                        $btn = "<button type='submit' class='btn btn-warning btn-xs'><i class='fa fa-trash'></i> Hapus dari Inventarisasi</button>";
+                        $confirm = e('Hapus asset ini dari inventarisasi? Data & riwayat tetap tersimpan dan tampil normal di daftar/histori, hanya tidak ikut disertakan pada inventarisasi baru berikutnya. Lanjutkan?');
+                        $btnClass = 'btn btn-warning btn-xs';
+                        $btnLabel = "<i class='fa fa-trash'></i> Hapus dari Inventarisasi";
                     }
 
                     return "
-                        {$badge}
-                        <form method='POST' action='{$url}' style='margin-top:4px' onsubmit=\"return confirm('{$confirm}')\">
-                            ".csrf_field()."
-                            {$btn}
-                        </form>
+                        {$badge}<br>
+                        <button type='button' class='btn-toggle-inventarisasi {$btnClass}' style='margin-top:4px'
+                            data-url='{$url}' data-token='{$token}' data-confirm='{$confirm}'>
+                            {$btnLabel}
+                        </button>
                     ";
                 }
             ];
@@ -261,6 +273,21 @@ use App\Traits\GetMasterOptions;
                     doc.open();
                     doc.write('<html><body><img style=\"height:3.6cm;width:auto;\" src=\"'+$(img).attr('src')+'\"/><script>window.onload = print<\/script><\/body></html>')
                     doc.close();
+                });
+
+                // Tombol 'Hapus dari Inventarisasi' / 'Sertakan Lagi' -- dikirim lewat
+                // AJAX (BUKAN <form>) karena baris tabel ini sudah ada di dalam
+                // <form id='form-table'> bawaan CrudBooster; <form> bersarang bikin
+                // tombol malah submit form bulk-action itu.
+                $(document).on('click', '.btn-toggle-inventarisasi', function(e) {
+                    e.preventDefault();
+                    var \$btn = $(this);
+                    if (!confirm(\$btn.data('confirm'))) return;
+                    \$btn.prop('disabled', true);
+                    $.post(\$btn.data('url'), {_token: \$btn.data('token')})
+                        .always(function() {
+                            location.reload();
+                        });
                 });
             ";
 
