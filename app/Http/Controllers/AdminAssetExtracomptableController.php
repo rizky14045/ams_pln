@@ -267,12 +267,31 @@ use App\Traits\GetMasterOptions;
             $this->script_js = "
                 $('.btn-print-qrcode').click(function(e) {
                     e.preventDefault();
-                    var img = $(this).closest('tr').find('img.qrcode')[0];
+                    // Ambil src gambar QR yang sedang tampil di baris ini (sudah termasuk
+                    // parameter ?v=... yang bikin selalu versi terbaru).
+                    var src = $(this).closest('tr').find('img.qrcode').attr('src');
                     var iframe = $(this).closest('tr').find('.iframe-qrcode')[0];
-                    var doc = iframe.contentWindow.document
+                    var doc = iframe.contentWindow.document;
                     doc.open();
-                    doc.write('<html><body><img style=\"height:3.6cm;width:auto;\" src=\"'+$(img).attr('src')+'\"/><script>window.onload = print<\/script><\/body></html>')
+                    doc.write('<html><body><img id=\"print-qr-img\" style=\"height:3.6cm;width:auto;\" src=\"'+src+'\"/></body></html>');
                     doc.close();
+
+                    // Cara lama (window.onload = print di dalam iframe) kadang mencetak
+                    // SEBELUM gambarnya selesai dimuat -> hasil cetak kosong. Di sini kita
+                    // tunggu <img>-nya benar-benar selesai load dulu baru panggil print().
+                    var printImg = doc.getElementById('print-qr-img');
+                    function doPrintQr() {
+                        iframe.contentWindow.focus();
+                        iframe.contentWindow.print();
+                    }
+                    if (printImg.complete && printImg.naturalWidth > 0) {
+                        doPrintQr();
+                    } else {
+                        printImg.onload = doPrintQr;
+                        printImg.onerror = function() {
+                            alert('Gagal memuat gambar QR Code untuk dicetak. Coba refresh halaman lalu ulangi.');
+                        };
+                    }
                 });
 
                 // Tombol 'Hapus dari Inventarisasi' / 'Sertakan Lagi' -- dikirim lewat

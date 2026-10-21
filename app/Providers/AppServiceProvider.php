@@ -25,6 +25,21 @@ class AppServiceProvider extends ServiceProvider
 
         $suppressDeprecations();
         view()->creator('*', $suppressDeprecations);
+
+        // config/lfm.php sengaja TIDAK berisi Closure (supaya php artisan config:cache
+        // tidak error "Closure::__set_state"). Fitur folder per-user Laravel File
+        // Manager tetap jalan dengan menyuntikkan closure-nya di sini saat runtime --
+        // KECUALI saat perintah `config:cache` sendiri sedang berjalan, supaya closure
+        // ini tidak ikut ter-tangkap & disimpan ke file cache (itu yang bikin error).
+        $runningConfigCache = $this->app->runningInConsole()
+            && isset($_SERVER['argv'])
+            && in_array('config:cache', $_SERVER['argv'], true);
+
+        if (!$runningConfigCache) {
+            config(['lfm.user_field' => function () {
+                return session('admin_id');
+            }]);
+        }
     }
 
     /**

@@ -35,9 +35,9 @@ return [
     // Flexibla way to customize client folders accessibility
     // Ex: The private folder of user will be named as the user id.
     // You cant use a closure when using the optimized config file (in Laravel 5.2 anyway)
-    'user_field' => function() {
-        return Session::get("admin_id");
-    },
+    // -> makanya closure-nya TIDAK ditaruh di sini (supaya php artisan config:cache aman),
+    // tapi disuntikkan saat runtime lewat App\Providers\AppServiceProvider::boot().
+    'user_field' => null,
 
     /*
     |--------------------------------------------------------------------------
