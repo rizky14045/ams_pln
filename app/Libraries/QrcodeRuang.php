@@ -75,7 +75,24 @@ class QrcodeRuang
         if ($generateIfNotExists) $this->generateIfNotExists();
 
         $relativePath = $this->getRelativePath();
-        return $this->getStorageDisk()->url($relativePath);
+        $disk = $this->getStorageDisk();
+
+        // Sama seperti QrcodeAsset: jangan andalkan APP_URL, pakai alamat yang
+        // sedang dipakai mengakses aplikasi saat ini kalau ada request aktif.
+        if (app()->bound('request') && request() && request()->getHost()) {
+            $url = request()->getSchemeAndHttpHost().'/media/qrcodes/'.$relativePath;
+        } else {
+            $url = $disk->url($relativePath);
+        }
+
+        // Sama seperti QrcodeAsset: nama file selalu sama, jadi tambahkan "?v=<mtime>"
+        // supaya browser fetch ulang begitu file-nya di-generate ulang.
+        if ($disk->exists($relativePath)) {
+            $separator = (strpos($url, '?') === false) ? '?' : '&';
+            $url .= $separator.'v='.$disk->lastModified($relativePath);
+        }
+
+        return $url;
     }
 
     public function getRelativePath()

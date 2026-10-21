@@ -91,11 +91,19 @@
         'value' => date('Y-m-d')
       ])
 
+      <div class="form-group">
+        <label class="control-label col-lg-2 col-md-3 col-sm-4">Foto Saat Ini</label>
+        <div class="col-lg-10 col-md-9 col-sm-8">
+          <img src="{{ $asset->urlGambar() }}" alt="Foto {{ $asset->nama_asset }}" style="max-width:200px;max-height:200px;display:block;" class="thumbnail">
+        </div>
+      </div>
+
       @include('partials.fields.image', [
         'name' => 'gambar',
         'value' => $asset->gambar,
-        'required' => true,
-        'label' => 'Foto Barang',
+        'required' => false,
+        'label' => 'Ganti Foto Barang',
+        'help' => 'Kosongkan kalau tidak ingin mengubah foto yang sudah ada.',
       ])
 
       <hr>

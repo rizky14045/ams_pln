@@ -2,8 +2,6 @@
 /public/hot
 /public/storage
 /storage/*.key
-public/media/qrcodes
-/public/uploads
 /vendor
 /.idea
 /.vagrant
@@ -12,5 +10,32 @@ Homestead.yaml
 npm-debug.log
 yarn-error.log
 .env
-/public/media
-/public/uploads
+
+# File hasil generate (QR Code) & upload foto tidak di-commit, tapi struktur
+# foldernya tetap dipertahankan (lewat .gitkeep) supaya langsung ada & siap
+# ditulisi begitu kode di-deploy ke server baru -- tidak bergantung pada
+# proses lain yang membuatkan folder ini duluan.
+/public/media/*
+!/public/media/qrcodes/
+/public/media/qrcodes/*
+!/public/media/qrcodes/.gitkeep
+!/public/media/qrcodes/extracomptable/
+/public/media/qrcodes/extracomptable/*
+!/public/media/qrcodes/extracomptable/.gitkeep
+!/public/media/qrcodes/inventory/
+/public/media/qrcodes/inventory/*
+!/public/media/qrcodes/inventory/.gitkeep
+!/public/media/qrcodes/ruang/
+/public/media/qrcodes/ruang/*
+!/public/media/qrcodes/ruang/.gitkeep
+
+/public/uploads/*
+!/public/uploads/assets-extracomptable/
+/public/uploads/assets-extracomptable/*
+!/public/uploads/assets-extracomptable/.gitkeep
+!/public/uploads/assets-aktiva-tetap/
+/public/uploads/assets-aktiva-tetap/*
+!/public/uploads/assets-aktiva-tetap/.gitkeep
+!/public/uploads/assets-inventory/
+/public/uploads/assets-inventory/*
+!/public/uploads/assets-inventory/.gitkeep

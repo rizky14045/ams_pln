@@ -75,7 +75,28 @@ class QrcodeAsset
         if ($generateIfNotExists) $this->generateIfNotExists();
 
         $relativePath = $this->getRelativePath();
-        return $this->getStorageDisk()->url($relativePath);
+        $disk = $this->getStorageDisk();
+
+        // Jangan andalkan APP_URL (gampang beda dari alamat yang sungguhan dipakai --
+        // port lokal, path /public, dsb -- dan sudah berkali-kali bikin gambar QR
+        // "tidak muncul" walau filenya ada). Kalau sedang ada request HTTP aktif,
+        // bangun URL dari alamat yang SEDANG dipakai mengakses aplikasi saat ini.
+        if (app()->bound('request') && request() && request()->getHost()) {
+            $url = request()->getSchemeAndHttpHost().'/media/qrcodes/'.$relativePath;
+        } else {
+            $url = $disk->url($relativePath);
+        }
+
+        // Nama file QR selalu sama (kd_asset.jpg), jadi URL-nya juga selalu sama
+        // walau isinya baru saja di-generate ulang (mis. saat edit asset) -> browser
+        // tetap menampilkan versi lama dari cache. Tambahkan query "?v=<mtime>" supaya
+        // URL berubah tiap file-nya berubah, tanpa mengubah nama file sebenarnya.
+        if ($disk->exists($relativePath)) {
+            $separator = (strpos($url, '?') === false) ? '?' : '&';
+            $url .= $separator.'v='.$disk->lastModified($relativePath);
+        }
+
+        return $url;
     }
 
     public function getRelativePath()

@@ -116,15 +116,22 @@ class AssetExtracomptableController extends ApiController
             'nama_asset' => 'required',
             'tgl_masuk' => 'required|date',
             'status' => 'required|in:'.implode(',', $list_status),
-            'gambar' => 'required|image',
+            // Wajib hanya saat tambah baru. Saat edit, kalau asset sudah punya foto,
+            // tidak perlu upload ulang -> foto lama tetap dipakai.
+            'gambar' => ($is_edit ? 'nullable' : 'required').'|image',
             // 'ref_id_request' => '',
         ]);
 
-        $path = public_path('uploads/assets-extracomptable');
-        $gambar = $req->file('gambar');
-        $ext = $gambar->getClientOriginalExtension();
-        $filename = implode('-', [md5($req->get('kd_asset')), date('ymd'), uniqid()]).'.'.$ext;
-        $gambar->move($path, $filename);
+        if ($req->hasFile('gambar')) {
+            $path = public_path('uploads/assets-extracomptable');
+            $gambar = $req->file('gambar');
+            $ext = $gambar->getClientOriginalExtension();
+            $filename = implode('-', [md5($req->get('kd_asset')), date('ymd'), uniqid()]).'.'.$ext;
+            $gambar->move($path, $filename);
+            $asset->gambar = $filename;
+        } elseif (!$is_edit) {
+            return false;
+        }
 
         $asset->id_gedung = $req->get('id_gedung');
         $asset->lantai = $req->get('lantai');
@@ -135,7 +142,6 @@ class AssetExtracomptableController extends ApiController
         $asset->nama_asset = $req->get('nama_asset');
         $asset->tgl_masuk = $req->get('tgl_masuk');
         $asset->status = $req->get('status');
-        $asset->gambar = $filename;
         $asset->ref_id_request = $req->get('ref_id_request') ?: null;
         return $asset->save();
     }

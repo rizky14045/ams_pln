@@ -311,15 +311,25 @@ class AssetExtracomptableController extends Controller
             'kd_asset' => 'required|unique:asset_extracomptable,kd_asset'.($is_edit? ','.$asset->id : ''),
             'nama_asset' => 'required',
             'tgl_masuk' => 'required|date',
-            'gambar' => 'required|image',
+            // Wajib hanya saat tambah baru. Saat edit, kalau asset sudah punya foto,
+            // user boleh tidak upload ulang -> foto lama tetap dipakai.
+            'gambar' => ($is_edit ? 'nullable' : 'required').'|image',
             // 'ref_id_request' => '',
         ]);
 
-        $path = public_path('uploads/assets-extracomptable');
-        $gambar = $req->file('gambar');
-        $ext = $gambar->getClientOriginalExtension();
-        $filename = implode('-', [md5($req->get('kd_asset')), date('ymd'), uniqid()]).'.'.$ext;
-        $gambar->move($path, $filename);
+        // Hanya ganti file & kolom gambar kalau user benar-benar upload foto baru.
+        if ($req->hasFile('gambar')) {
+            $path = public_path('uploads/assets-extracomptable');
+            $gambar = $req->file('gambar');
+            $ext = $gambar->getClientOriginalExtension();
+            $filename = implode('-', [md5($req->get('kd_asset')), date('ymd'), uniqid()]).'.'.$ext;
+            $gambar->move($path, $filename);
+            $asset->gambar = $filename;
+        } elseif (!$is_edit) {
+            // Create selalu wajib upload, jadi ini seharusnya tidak pernah kejadian,
+            // tapi dijaga supaya tidak tersimpan tanpa foto.
+            return false;
+        }
 
         $asset->id_gedung = $req->get('id_gedung');
         $asset->lantai = $req->get('lantai');
@@ -333,7 +343,6 @@ class AssetExtracomptableController extends Controller
         if (!$is_edit) {
             $asset->status = '';
         }
-        $asset->gambar = $filename;
         $asset->ref_id_request = $req->get('ref_id_request') ?: null;
         $saved = $asset->save();
 
@@ -343,7 +352,18 @@ class AssetExtracomptableController extends Controller
                 // Generate ulang QR Code setiap kali di-edit, supaya kalau logo/data
                 // berubah (mis. logo lama #PJB -> PLN Nusantara Power), QR yang sudah
                 // pernah dibuat ikut diperbarui, bukan tetap memakai file lama yang di-cache.
-                $asset->regenerateQrcode();
+                // Dibungkus try/catch: kalau generate QR gagal (mis. folder belum ada/
+                // tidak writable di server), perubahan data asset TETAP tersimpan --
+                // cuma QR-nya yang bermasalah, dicatat ke log supaya ketahuan sebabnya.
+                try {
+                    $asset->regenerateQrcode();
+                } catch (\Throwable $e) {
+                    \Log::error('Gagal generate ulang QR Code asset extracomptable', [
+                        'asset_id' => $asset->id,
+                        'kd_asset' => $asset->kd_asset,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
             } else {
                 $asset->logCreate(\CB::me()->id);
             }
