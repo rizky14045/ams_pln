@@ -187,6 +187,17 @@ class AssetExtracomptable extends ArchiveableModel
         ]);
     }
 
+    /**
+     * Paksa generate ulang file QR Code (menimpa file lama), tidak peduli
+     * sudah ada atau belum. Dipanggil tiap kali asset di-edit supaya QR
+     * selalu ikut perubahan data/logo terbaru (bukan cuma dibuat sekali lalu
+     * di-cache selamanya, lihat QrcodeAsset::generateIfNotExists()).
+     */
+    public function regenerateQrcode()
+    {
+        return $this->qrcode()->generate();
+    }
+
     public function getLocation()
     {
         $ruang = $this->ruang;

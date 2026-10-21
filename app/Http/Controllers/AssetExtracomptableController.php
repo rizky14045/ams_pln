@@ -340,6 +340,10 @@ class AssetExtracomptableController extends Controller
         if ($saved) {
             if ($is_edit) {
                 $asset->logUpdate(\CB::me()->id);
+                // Generate ulang QR Code setiap kali di-edit, supaya kalau logo/data
+                // berubah (mis. logo lama #PJB -> PLN Nusantara Power), QR yang sudah
+                // pernah dibuat ikut diperbarui, bukan tetap memakai file lama yang di-cache.
+                $asset->regenerateQrcode();
             } else {
                 $asset->logCreate(\CB::me()->id);
             }
